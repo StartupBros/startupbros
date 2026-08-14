@@ -1,0 +1,52 @@
+name: perfect-cuboid-e0-padic13
+on:
+  push:
+    branches: [math/perfect-cuboid-e0-padic13]
+permissions:
+  contents: read
+jobs:
+  certify:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - delta: 105
+            model: '[0,11375616000,0,21744956730941440000,247362277707805139927040000000]'
+          - delta: 345
+            model: '[0,3462144000,0,2014183137648640000,6973392064911413084160000000]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PARI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pari-gp pari-elldata pari-seadata
+      - name: Exact 13-adic BSD rank certificate
+        env:
+          DELTA: ${{ matrix.delta }}
+          MODEL: ${{ matrix.model }}
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          cat > /tmp/run.gp <<'GP'
+          default(realprecision,80);
+          default(parisizemax,4000000000);
+          E=ellinit(eval(getenv("MODEL")));
+          print("DELTA=",getenv("DELTA"));
+          print("AP13=",ellap(E,13));
+          print("PADIC13=",ellpadicbsd(E,13,20));
+          print("ELLRANK=",ellrank(E));
+          print("TORSION=",elltors(E));
+          quit;
+          GP
+          GP_COLORS='' gp -q /tmp/run.gp > results/output.raw 2>&1
+          sed -r 's/\x1B\[[0-9;]*[mK]//g' results/output.raw > results/output.txt
+          cat results/output.txt
+          ! grep -Eq '\*\*\*|syntax error|incorrect type|at top-level|stack overflows' results/output.txt
+          grep -Eq '^PADIC13=\[0,' results/output.txt
+          sha256sum results/output.raw results/output.txt > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: e0-padic13-${{ matrix.delta }}
+          path: results/
+          if-no-files-found: error
