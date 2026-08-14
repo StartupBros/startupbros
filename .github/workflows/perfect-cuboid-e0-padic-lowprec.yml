@@ -1,0 +1,71 @@
+name: perfect-cuboid-e0-padic-lowprec
+on:
+  push:
+    branches: [math/perfect-cuboid-e0-padic-lowprec]
+permissions:
+  contents: read
+jobs:
+  certify:
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        include:
+          - delta: 105
+            p: 13
+            model: '[0,11375616000,0,21744956730941440000,247362277707805139927040000000]'
+          - delta: 105
+            p: 19
+            model: '[0,11375616000,0,21744956730941440000,247362277707805139927040000000]'
+          - delta: 105
+            p: 29
+            model: '[0,11375616000,0,21744956730941440000,247362277707805139927040000000]'
+          - delta: 345
+            p: 13
+            model: '[0,3462144000,0,2014183137648640000,6973392064911413084160000000]'
+          - delta: 345
+            p: 19
+            model: '[0,3462144000,0,2014183137648640000,6973392064911413084160000000]'
+          - delta: 345
+            p: 29
+            model: '[0,3462144000,0,2014183137648640000,6973392064911413084160000000]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PARI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pari-gp pari-elldata pari-seadata
+      - name: Fail-closed low-precision p-adic BSD
+        env:
+          DELTA: ${{ matrix.delta }}
+          PRIME: ${{ matrix.p }}
+          MODEL: ${{ matrix.model }}
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          cat > /tmp/run.gp <<'GP'
+          default(realprecision,80);
+          default(parisizemax,7000000000);
+          E=ellinit(eval(getenv("MODEL")));
+          p=eval(getenv("PRIME"));
+          print("DELTA=",getenv("DELTA"));
+          print("PRIME=",p);
+          print("AP=",ellap(E,p));
+          print("ROOTNO=",ellrootno(E));
+          print("PADIC=",ellpadicbsd(E,p,8));
+          print("ELLRANK=",ellrank(E));
+          print("TORSION=",elltors(E));
+          quit;
+          GP
+          GP_COLORS='' gp -q /tmp/run.gp > results/output.raw 2>&1
+          sed -r 's/\x1B\[[0-9;]*[mK]//g' results/output.raw > results/output.txt
+          cat results/output.txt
+          ! grep -Eq '\*\*\*|syntax error|incorrect type|at top-level|stack overflows' results/output.txt
+          grep -Eq '^PADIC=\[0,' results/output.txt
+          sha256sum results/output.raw results/output.txt > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: e0-padic-${{ matrix.delta }}-${{ matrix.p }}
+          path: results/
+          if-no-files-found: error
