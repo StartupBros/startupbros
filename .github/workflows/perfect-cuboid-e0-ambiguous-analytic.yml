@@ -33,8 +33,7 @@ jobs:
           cat > /tmp/run.gp <<'GP'
           default(realprecision,120);
           default(parisizemax,8000000000);
-          m=eval(getenv("MODEL"));
-          E=ellinit(m);
+          m=eval(getenv("MODEL")); E=ellinit(m);
           print("DELTA=",getenv("DELTA"));
           print("MODEL=",m);
           print("MINIMAL=",ellminimalmodel(E));
@@ -42,26 +41,19 @@ jobs:
           print("ROOTNO=",ellrootno(E));
           print("ELLRANK0=",ellrank(E));
           print("ELLRANK20=",ellrank(E,20));
-          ar=ellanalyticrank(E,2^(-150));
-          print("ANALYTIC=",ar);
-          ps=[5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71,73,79,83,89,97];
-          for(i=1,#ps,
-            p=ps[i];
-            if(ellap(E,p) != 0,
-              rr=iferr(ellpadicbsd(E,p,20),err,["ERR",Str(err)]);
-              print("PADIC|",p,"|",rr)
-            )
-          );
-          pts=ellratpoints(E,10^8);
-          print("RATPOINTS1E8=",pts);
+          ar=ellanalyticrank(E,2^(-150)); print("ANALYTIC=",ar);
+          ps=[11,13,19,29,31,37,41,43,47,53,59,61,67,71,73,83,89,97];
+          for(i=1,#ps,p=ps[i];if(ellap(E,p)!=0,rr=iferr(ellpadicbsd(E,p,20),err,["ERR",Str(err)]);print("PADIC|",p,"|",rr)));
+          pts=ellratpoints(E,10^8); print("RATPOINTS1E8=",pts);
           quit;
           GP
-          GP_COLORS='' gp -q /tmp/run.gp > results/output.txt 2>&1
+          GP_COLORS='' gp -q /tmp/run.gp > results/output.raw 2>&1
+          sed -r 's/\x1B\[[0-9;]*[mK]//g' results/output.raw > results/output.txt
           cat results/output.txt
-          ! grep -Eq '^\s*\*\*|syntax error|incorrect type|at top-level|stack overflows' results/output.txt
-          grep -q '^ANALYTIC=' results/output.txt
-          grep -q '^PADIC|' results/output.txt
-          sha256sum results/output.txt > results/SHA256SUMS
+          ! grep -Eq '\*\*\*|syntax error|incorrect type|at top-level|stack overflows' results/output.txt
+          test "$(grep -c '^ANALYTIC=' results/output.txt)" -eq 1
+          test "$(grep -c '^PADIC|' results/output.txt)" -ge 1
+          sha256sum results/output.raw results/output.txt > results/SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
           name: e0-ambiguous-${{ matrix.delta }}
