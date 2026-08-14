@@ -1,0 +1,84 @@
+name: kissing5-sdp-calibration-fast
+
+on:
+  push:
+    branches:
+      - kissing5-relay-20260814
+    paths:
+      - .github/workflows/kissing5-sdp-calibration-fast.yml
+  workflow_dispatch:
+
+jobs:
+  fast-degree10:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install and download
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y coinor-csdp unzip python3-pip
+          python3 -m pip install --user --break-system-packages gdown
+          mkdir -p results
+          "$HOME/.local/bin/gdown" 11I3-NbTLH6-VkuuLGo4XvxDc_cp4Re2h -O results/kissing_5_10_10.zip
+          echo '98d26bdae8e6d2aa573234ad6043caac9cb1978748a19729ea8189cae859824c  results/kissing_5_10_10.zip' | sha256sum -c -
+          unzip -o results/kissing_5_10_10.zip -d results
+      - name: Configure independent fast-mode parameter path
+        run: |
+          cat > param.csdp <<'EOF'
+          axtol=1.0e-6
+          atytol=1.0e-6
+          objtol=1.0e-7
+          maxiter=60
+          minstepfrac=0.90
+          maxstepfrac=0.97
+          minstepp=1.0e-10
+          minstepd=1.0e-10
+          usexzgap=1
+          tweakgap=0
+          affine=0
+          perturbobj=1
+          fastmode=1
+          printlevel=2
+          EOF
+          cat param.csdp
+      - name: Run fast-mode calibration
+        id: solve
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          timeout 25m /usr/bin/time -v csdp results/kissing_5_10_10.dat-s results/kissing_5_10_10_fast.sol 2>&1 | tee results/degree10_fast_csdp.log
+          echo $? > results/solver_exit_status.txt
+      - name: Parse any finite output
+        if: always()
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,re,hashlib
+          s=Path('results/degree10_fast_csdp.log').read_text() if Path('results/degree10_fast_csdp.log').exists() else ''
+          pats={'primal_objective':r'Primal objective value\s*:\s*([-+0-9.eE]+)',
+                'dual_objective':r'Dual objective value\s*:\s*([-+0-9.eE]+)',
+                'relative_primal_infeasibility':r'Relative primal infeasibility\s*:\s*([-+0-9.eE]+)',
+                'relative_dual_infeasibility':r'Relative dual infeasibility\s*:\s*([-+0-9.eE]+)',
+                'real_relative_gap':r'Real Relative Gap\s*:\s*([-+0-9.eE]+)',
+                'relative_gap':r'Relative Gap\s*:\s*([-+0-9.eE]+)'}
+          out={}
+          for k,p in pats.items():
+              m=re.findall(p,s,re.I)
+              if m: out[k]=float(m[-1])
+          out['success_marker']='Success: SDP solved' in s
+          out['solver_exit_status']=Path('results/solver_exit_status.txt').read_text().strip() if Path('results/solver_exit_status.txt').exists() else None
+          if Path('results/kissing_5_10_10_fast.sol').exists():
+              out['solution_sha256']=hashlib.sha256(Path('results/kissing_5_10_10_fast.sol').read_bytes()).hexdigest()
+          out['status']='FINITE_PAIR' if 'primal_objective' in out and 'dual_objective' in out else 'NO_FINITE_PAIR'
+          Path('results/degree10_fast_calibration.json').write_text(json.dumps(out,indent=2,sort_keys=True)); print(json.dumps(out,indent=2,sort_keys=True))
+          PY
+          sha256sum results/* > results/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kissing5-degree10-fast-calibration
+          path: results/
+          if-no-files-found: error
+          retention-days: 30
