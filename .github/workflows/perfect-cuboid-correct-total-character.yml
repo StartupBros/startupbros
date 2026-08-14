@@ -1,0 +1,43 @@
+name: perfect-cuboid-correct-total-character
+on:
+  push:
+    branches: [math/perfect-cuboid-correct-total-character]
+permissions:
+  contents: read
+jobs:
+  exact-rank:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install exact tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y eclib-tools pari-gp pari-elldata
+      - name: Exact descent and analytic discriminator
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          printf '%s\n' '[0,12947955841,0,41660607427928294400,0]' | mwrank -q -v 1 -l -o -p 100 -b 10 -S -1 > results/mwrank.txt 2>&1 || true
+          cat results/mwrank.txt
+          cat > /tmp/run.gp <<'GP'
+          default(parisizemax,4000000000);
+          E=ellinit([0,12947955841,0,41660607427928294400,0]);
+          print("GLOBALRED=",ellglobalred(E));
+          print("ROOT=",ellrootno(E));
+          print("TORSION=",elltors(E));
+          print("RANK=",ellrank(E));
+          print("ANALYTIC=",ellanalyticrank(E));
+          quit;
+          GP
+          GP_COLORS='' gp -q /tmp/run.gp > results/pari.txt 2>&1
+          cat results/pari.txt
+          ! grep -Eq '\*\*\*|syntax error|incorrect type|at top-level|stack overflows' results/pari.txt
+          grep -Eq '^ROOT=-?1$' results/pari.txt
+          grep -Eq '^ANALYTIC=\[[0-9]+,' results/pari.txt
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perfect-cuboid-correct-total-character
+          path: results/
+          if-no-files-found: error
