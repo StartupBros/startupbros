@@ -1,0 +1,69 @@
+name: perfect-cuboid-e0-ambiguous-analytic
+on:
+  push:
+    branches: [math/perfect-cuboid-e0-ambiguous-analytic]
+permissions:
+  contents: read
+jobs:
+  analyze:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - delta: 1
+            model: '[0,1194439680000,0,239738147958629376000000,286352756731497925108039680000000000]'
+          - delta: 105
+            model: '[0,11375616000,0,21744956730941440000,247362277707805139927040000000]'
+          - delta: 345
+            model: '[0,3462144000,0,2014183137648640000,6973392064911413084160000000]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PARI data
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pari-gp pari-elldata pari-seadata eclib-tools
+      - name: Analytic and p-adic rank discrimination
+        env:
+          DELTA: ${{ matrix.delta }}
+          MODEL: ${{ matrix.model }}
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          cat > /tmp/run.gp <<'GP'
+          default(realprecision,120);
+          default(parisizemax,8000000000);
+          m=eval(getenv("MODEL"));
+          E=ellinit(m);
+          print("DELTA=",getenv("DELTA"));
+          print("MODEL=",m);
+          print("MINIMAL=",ellminimalmodel(E));
+          print("GLOBALRED=",ellglobalred(E));
+          print("ROOTNO=",ellrootno(E));
+          print("ELLRANK0=",ellrank(E));
+          print("ELLRANK20=",ellrank(E,20));
+          ar=ellanalyticrank(E,2^(-150));
+          print("ANALYTIC=",ar);
+          ps=[5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71,73,79,83,89,97];
+          for(i=1,#ps,
+            p=ps[i];
+            if(ellap(E,p) != 0,
+              rr=iferr(ellpadicbsd(E,p,20),err,["ERR",Str(err)]);
+              print("PADIC|",p,"|",rr)
+            )
+          );
+          pts=ellratpoints(E,10^8);
+          print("RATPOINTS1E8=",pts);
+          quit;
+          GP
+          GP_COLORS='' gp -q /tmp/run.gp > results/output.txt 2>&1
+          cat results/output.txt
+          ! grep -Eq '^\s*\*\*|syntax error|incorrect type|at top-level|stack overflows' results/output.txt
+          grep -q '^ANALYTIC=' results/output.txt
+          grep -q '^PADIC|' results/output.txt
+          sha256sum results/output.txt > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: e0-ambiguous-${{ matrix.delta }}
+          path: results/
+          if-no-files-found: error
