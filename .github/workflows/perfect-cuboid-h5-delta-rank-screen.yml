@@ -31,8 +31,6 @@ jobs:
           D=772800
           assert D%d==0
           k=D//d
-          # f(z)=(z^2+k^2)(d z^2+4 alpha z+d k^2)
-          # coefficients in descending order a,b,c,e0,e for binary-quartic invariants
           a=d
           b=4*alpha
           c=2*d*k*k
@@ -43,7 +41,7 @@ jobs:
           model=[0,0,0,-27*I,-27*J]
           open('results/model.txt','w').write(str(model)+'\n')
           open('results/data.json','w').write(json.dumps({'delta':d,'k':k,'quartic_coefficients':[a,b,c,dd,e],'I':I,'J':J,'model':model},indent=2)+'\n')
-          gp=f'''default(parisizemax,4000000000);\nF={a}*x^4+({b})*x^3+({c})*x^2+({dd})*x+({e});\nA=ellfromeqn(y^2-F);\nE1=ellinit(A); E2=ellinit({model});\nprint("DELTA={d}");\nprint("PARI_MODEL=",A);\nprint("FORMULA_MODEL=",{model});\nprint("J_EQUAL=",ellj(E1)==ellj(E2));\nprint("PARI_RANK=",ellrank(E1));\nprint("PARI_TORSION=",elltors(E1));\nquit;\n'''
+          gp=f'''default(parisizemax,4000000000);\nF={a}*x^4+({b})*x^3+({c})*x^2+({dd})*x+({e});\nA=ellfromeqn(y^2-F);\nE1=ellinit(A); E2=ellinit({model});\nprint("DELTA={d}");\nprint("PARI_MODEL=",A);\nprint("FORMULA_MODEL=",{model});\nprint("J_EQUAL=",E1.j==E2.j);\nprint("PARI_RANK=",ellrank(E1));\nprint("PARI_TORSION=",elltors(E1));\nquit;\n'''
           open('/tmp/check.gp','w').write(gp)
           PY
           GP_COLORS='' gp -q /tmp/check.gp > results/pari.txt 2>&1
