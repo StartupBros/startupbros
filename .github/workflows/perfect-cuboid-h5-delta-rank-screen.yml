@@ -1,0 +1,63 @@
+name: perfect-cuboid-h5-delta-rank-screen
+on:
+  push:
+    branches: [math/perfect-cuboid-h5-delta-rank-screen]
+permissions:
+  contents: read
+jobs:
+  rank-screen:
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        delta: [1,2,3,5,6,7,10,14,15,21,23,30,35,42,46,69,70,105,115,138,161,210,230,322,345,483,690,805,966,1610,2415,4830]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install exact tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y eclib-tools pari-gp pari-elldata
+      - name: Build quartic and verify Jacobian model
+        env:
+          DELTA: ${{ matrix.delta }}
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          python3 - <<'PY'
+          import json, os
+          d=int(os.environ['DELTA'])
+          alpha=417605
+          D=772800
+          assert D%d==0
+          k=D//d
+          # f(z)=(z^2+k^2)(d z^2+4 alpha z+d k^2)
+          # coefficients in descending order a,b,c,e0,e for binary-quartic invariants
+          a=d
+          b=4*alpha
+          c=2*d*k*k
+          dd=4*alpha*k*k
+          e=d*k**4
+          I=12*a*e-3*b*dd+c*c
+          J=72*a*c*e+9*b*c*dd-27*a*dd*dd-27*b*b*e-2*c**3
+          model=[0,0,0,-27*I,-27*J]
+          open('results/model.txt','w').write(str(model)+'\n')
+          open('results/data.json','w').write(json.dumps({'delta':d,'k':k,'quartic_coefficients':[a,b,c,dd,e],'I':I,'J':J,'model':model},indent=2)+'\n')
+          gp=f'''default(parisizemax,4000000000);\nF={a}*x^4+({b})*x^3+({c})*x^2+({dd})*x+({e});\nA=ellfromeqn(y^2-F);\nE1=ellinit(A); E2=ellinit({model});\nprint("DELTA={d}");\nprint("PARI_MODEL=",A);\nprint("FORMULA_MODEL=",{model});\nprint("J_EQUAL=",ellj(E1)==ellj(E2));\nprint("PARI_RANK=",ellrank(E1));\nprint("PARI_TORSION=",elltors(E1));\nquit;\n'''
+          open('/tmp/check.gp','w').write(gp)
+          PY
+          GP_COLORS='' gp -q /tmp/check.gp > results/pari.txt 2>&1
+          cat results/pari.txt
+          ! grep -Eq '\*\*\*|syntax error|incorrect type|at top-level|stack overflows' results/pari.txt
+          grep -q '^J_EQUAL=1$' results/pari.txt
+      - name: Exact eclib descent
+        run: |
+          set -euo pipefail
+          timeout 240s sh -c "cat results/model.txt | mwrank -q -v 1 -l -o -p 100 -b 10 -S -1" > results/mwrank.txt 2>&1 || true
+          cat results/mwrank.txt
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: h5-delta-${{ matrix.delta }}
+          path: results/
+          if-no-files-found: error
