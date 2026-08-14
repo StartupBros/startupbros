@@ -1,0 +1,39 @@
+name: perfect-cuboid-h5-d5-eclib
+on:
+  push:
+    branches: [math/perfect-cuboid-h5-d5-eclib]
+permissions:
+  contents: read
+jobs:
+  exact-rank:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: E0
+            model: '[0,238887936000,0,9589525918345175040000,2290822053851983400864317440000000]'
+          - label: EP
+            model: '[0,-1420780,0,771687168000,-1096397694551040000]'
+          - label: EM
+            model: '[0,4761620,0,-19882722048000,-94673966958197760000]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install eclib
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y eclib-tools
+      - name: Exact saturated descent
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          printf '%s\n' '${{ matrix.model }}' | mwrank -q -v 1 -l -o -p 100 -b 10 -S -1 > results/${{ matrix.label }}.txt 2>&1
+          cat results/${{ matrix.label }}.txt
+          ! grep -qiE 'error|failed|The rank has not been completely determined|only a lower bound' results/${{ matrix.label }}.txt
+          grep -q 'The rank and full Mordell-Weil basis have been determined unconditionally.' results/${{ matrix.label }}.txt
+          sha256sum results/${{ matrix.label }}.txt > results/${{ matrix.label }}.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: h5-d5-${{ matrix.label }}
+          path: results/
+          if-no-files-found: error
