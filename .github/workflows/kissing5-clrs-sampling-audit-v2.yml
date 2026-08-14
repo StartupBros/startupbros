@@ -1,0 +1,145 @@
+name: kissing5-clrs-sampling-audit-v2
+
+on:
+  push:
+    branches:
+      - kissing5-relay-20260814
+    paths:
+      - .github/workflows/kissing5-clrs-sampling-audit-v2.yml
+  workflow_dispatch:
+
+jobs:
+  independent-sampling-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.12.6'
+
+      - name: Emit the pinned rational sample set
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/nanleij/ClusteredLowRankSolver.jl.git clrs
+          git -C clrs checkout 09ac81aed031bdea714832cf515244f6eb223531
+          julia --project=clrs -e 'using Pkg; Pkg.instantiate()'
+          mkdir -p results
+          cat > emit_samples.jl <<'JULIA'
+          using Random, ClusteredLowRankSolver
+          const N3=14
+          Random.seed!(1935)
+          tmp = length([deg for deg=0:N3 for k=0:div(deg,3) for j=0:div(deg-3k,2)])
+          @assert tmp == 147
+          cheb_points=[vcat(ClusteredLowRankSolver.sample_points_chebyshev(2N3+k,-1,1)...) for k=0:2]
+          candidates=[[cheb_points[1][i+1],cheb_points[2][j+1],cheb_points[3][k+1]]
+                      for i=0:2N3 for j=0:2N3+1 for k=0:2N3+2]
+          chosen=sort(candidates[shuffle(1:length(candidates))[1:tmp]])
+          nums=[[floor(BigInt,10^4*x) for x in s] for s in chosen]
+          open("results/sample_numerators.csv","w") do io
+              for s in nums
+                  println(io, join(s,","))
+              end
+          end
+          JULIA
+          julia --project=clrs emit_samples.jl
+
+      - name: Independent standard-library Python modular determinant audit
+        run: |
+          set -euxo pipefail
+          cat > verify_samples.py <<'PY'
+          from pathlib import Path
+          import hashlib, json
+
+          rows=[tuple(map(int,line.split(','))) for line in Path('results/sample_numerators.csv').read_text().splitlines()]
+          assert len(rows)==147 and len(set(rows))==147
+          exps=[]
+          hist={}
+          for deg in range(15):
+              for k in range(deg//3+1):
+                  for j in range((deg-3*k)//2+1):
+                      exps.append((deg-3*k-2*j,j,k))
+                      hist[deg]=hist.get(deg,0)+1
+          assert len(exps)==147
+
+          text=';'.join(','.join(map(str,r)) for r in rows)
+          sample_hash=hashlib.sha256(text.encode()).hexdigest()
+          assert sample_hash=='b71bce86a66e3a641742c039a246b72f951e07c36fccb8228509518fb8172d08'
+
+          def matrix_mod(samples,p):
+              invd=pow(10000,-1,p)
+              M=[]
+              for nums in samples:
+                  u,v,t=[(n%p)*invd%p for n in nums]
+                  e1=(u+v+t)%p
+                  e2=(u*v+u*t+v*t)%p
+                  e3=u*v%p*t%p
+                  M.append([pow(e1,a,p)*pow(e2,b,p)%p*pow(e3,c,p)%p for a,b,c in exps])
+              return M
+
+          def rank_det(A,p):
+              A=[row[:] for row in A]
+              n=len(A); m=len(A[0]); r=0; det=1
+              for c in range(m):
+                  pivot=next((i for i in range(r,n) if A[i][c]%p),None)
+                  if pivot is None:
+                      continue
+                  if pivot!=r:
+                      A[r],A[pivot]=A[pivot],A[r]
+                      det=(-det)%p
+                  pv=A[r][c]%p
+                  det=det*pv%p
+                  inv=pow(pv,-1,p)
+                  A[r]=[(x*inv)%p for x in A[r]]
+                  for i in range(r+1,n):
+                      f=A[i][c]%p
+                      if f:
+                          A[i]=[(x-f*y)%p for x,y in zip(A[i],A[r])]
+                  r+=1
+                  if r==n:
+                      break
+              return r, det if n==m and r==n else 0
+
+          primes=[1000003,1000033]
+          ranks=[]; dets=[]; duplicate_sample_ranks=[]; duplicate_column_ranks=[]
+          for p in primes:
+              M=matrix_mod(rows,p)
+              r,d=rank_det(M,p)
+              assert r==147 and d!=0
+              ranks.append(r); dets.append(d)
+              bad=rows[:-1]+[rows[0]]
+              rb,_=rank_det(matrix_mod(bad,p),p)
+              assert rb==146
+              duplicate_sample_ranks.append(rb)
+              Mcol=[row[:-1]+[row[0]] for row in M]
+              rc,_=rank_det(Mcol,p)
+              assert rc==146
+              duplicate_column_ranks.append(rc)
+
+          assert dets==[513179,799808], dets
+          out={
+              'status':'PASS',
+              'method':'standard-library Python modular Gaussian elimination',
+              'basis_dimension':147,
+              'sample_numerator_sha256':sample_hash,
+              'primes':primes,
+              'ranks':ranks,
+              'determinant_residues':dets,
+              'duplicate_sample_ranks':duplicate_sample_ranks,
+              'duplicate_basis_column_ranks':duplicate_column_ranks,
+              'weighted_degree_histogram':hist,
+              'agrees_with_nemo_primary':True,
+          }
+          Path('results/independent_python_sampling_audit.json').write_text(json.dumps(out,indent=2,sort_keys=True))
+          print(json.dumps(out,indent=2,sort_keys=True))
+          PY
+          python3 verify_samples.py
+          sha256sum results/* > results/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kissing5-clrs-sampling-audit-v2
+          path: results/
+          if-no-files-found: error
+          retention-days: 30
