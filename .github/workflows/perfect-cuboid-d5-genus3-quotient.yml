@@ -1,0 +1,31 @@
+name: perfect-cuboid-d5-genus3-quotient
+on:
+  push:
+    branches: [math/perfect-cuboid-d5-genus3-quotient]
+permissions:
+  contents: read
+jobs:
+  exact-rank:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install eclib
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y eclib-tools
+      - name: Exact descent
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          printf '%s\n' '[0,64739779205,0,1041515185698207360000,0]' | mwrank -q -v 1 -l -o -p 100 -b 10 -S -1 > results/E5zero.txt 2>&1
+          cat results/E5zero.txt
+          ! grep -qiE 'error|failed|The rank has not been completely determined|only a lower bound' results/E5zero.txt
+          grep -Eq 'Rank = [0-9]+|rank\(E\) = [0-9]+' results/E5zero.txt
+          grep -q 'The rank and full Mordell-Weil basis have been determined unconditionally.' results/E5zero.txt
+          sha256sum results/E5zero.txt > results/E5zero.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perfect-cuboid-E5zero
+          path: results/
+          if-no-files-found: error
