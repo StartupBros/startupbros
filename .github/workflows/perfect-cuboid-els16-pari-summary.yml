@@ -1,0 +1,70 @@
+name: perfect-cuboid-els16-pari-summary
+on:
+  push:
+    branches: [math/perfect-cuboid-els16-pari-summary]
+permissions:
+  contents: read
+jobs:
+  census:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PARI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pari-gp
+      - name: Complete exact-rank-bound census
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          python3 - <<'PY'
+          import json
+          deltas=[1,5,6,14,21,30,46,69,70,105,161,230,345,805,966,4830]
+          alpha=417605
+          D=772800
+          lines=[]
+          meta={}
+          for d in deltas:
+              k=D//d
+              polys={
+                  'E0': f'({d})*x^4+({4*alpha})*x^3+({2*d*k*k})*x^2+({4*alpha*k*k})*x+({d*k**4})',
+                  'EP': f'({d})*x^4+({4*alpha-4*d*k})*x^2+({-2*k*(4*alpha-2*d*k)})',
+                  'EM': f'({d})*x^4+({4*alpha+4*d*k})*x^2+({2*k*(4*alpha+2*d*k)})',
+              }
+              meta[str(d)]={'k':k,'polynomials':polys}
+              for name,poly in polys.items():
+                  tag=f'D{d}_{name}'
+                  lines += [
+                      f'F_{tag}={poly};',
+                      f'A_{tag}=ellfromeqn(y^2-F_{tag});',
+                      f'E_{tag}=ellinit(A_{tag});',
+                      f'print("ROW|{d}|{name}|",A_{tag},"|",ellrank(E_{tag}),"|",elltors(E_{tag}));',
+                  ]
+          open('/tmp/run.gp','w').write('\n'.join(lines)+'\nquit;\n')
+          open('results/meta.json','w').write(json.dumps(meta,indent=2)+'\n')
+          PY
+          GP_COLORS='' gp -q /tmp/run.gp > results/pari_rows.txt 2>&1
+          cat results/pari_rows.txt
+          ! grep -Eq '^\s*\*\*|syntax error|incorrect type|at top-level|stack overflows' results/pari_rows.txt
+          test "$(grep -c '^ROW|' results/pari_rows.txt)" -eq 48
+          python3 - <<'PY'
+          import ast,json,re
+          rows=[]
+          for line in open('results/pari_rows.txt'):
+              if not line.startswith('ROW|'): continue
+              parts=line.rstrip().split('|',5)
+              _,d,name,model,rank,torsion=parts
+              m=re.match(r'\[(\d+),\s*(\d+),',rank)
+              if not m: raise SystemExit('bad rank '+rank)
+              rows.append({'delta':int(d),'factor':name,'model':model,'lower':int(m.group(1)),'upper':int(m.group(2)),'raw_rank':rank,'torsion':torsion})
+          rows.sort(key=lambda r:(r['delta'],r['factor']))
+          open('results/rank_census.json','w').write(json.dumps(rows,indent=2)+'\n')
+          for r in rows:
+              print(f"{r['delta']:4d} {r['factor']:2s} {r['lower']}-{r['upper']}")
+          PY
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: els16-pari-census
+          path: results/
+          if-no-files-found: error
