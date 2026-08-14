@@ -1,0 +1,143 @@
+name: perfect-cuboid-d5-rigorous-lvalue
+on:
+  push:
+    branches: [math/perfect-cuboid-d5-rigorous-lvalue]
+permissions:
+  contents: read
+jobs:
+  rigorous-lvalue:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PARI/GP
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pari-gp pari-elldata
+      - name: Generate exact coefficients
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          cat > /tmp/coeffs.gp <<'GP'
+          default(parisize,512000000);
+          default(parisizemax,4000000000);
+          E=ellinit([0,64739779205,0,1041515185698207360000,0]);
+          v=ellan(E,400000);
+          write("results/an.gpvec",v);
+          print("COUNT=",#v);
+          print("CONDUCTOR=",ellglobalred(E)[1]);
+          print("ROOT=",ellrootno(E));
+          quit;
+          GP
+          GP_COLORS='' gp -q /tmp/coeffs.gp > results/pari_metadata.txt 2>&1
+          cat results/pari_metadata.txt
+          ! grep -Eq '\*\*\*|syntax error|incorrect type|at top-level|stack overflows' results/pari_metadata.txt
+          grep -q '^COUNT=400000$' results/pari_metadata.txt
+          grep -q '^CONDUCTOR=13005813450$' results/pari_metadata.txt
+          grep -q '^ROOT=1$' results/pari_metadata.txt
+      - name: Directed interval proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import ast, hashlib, json, math
+          from decimal import Decimal, Context, localcontext, ROUND_FLOOR, ROUND_CEILING, ROUND_HALF_EVEN
+          from fractions import Fraction
+          from pathlib import Path
+          M=400000
+          N=13005813450
+          coeff_text=Path('results/an.gpvec').read_text().strip()
+          coeffs=ast.literal_eval(coeff_text)
+          assert len(coeffs)==M and coeffs[0]==1
+          assert all(isinstance(a,int) for a in coeffs)
+          pi_s='3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679'
+          scale_pi=10**100
+          pi_lo=Fraction(int(pi_s.replace('.','')),scale_pi)
+          pi_hi=pi_lo+Fraction(1,scale_pi)
+          S=10**130
+          sf=math.isqrt(N*S*S)
+          sqrt_lo=Fraction(sf,S)
+          sqrt_hi=Fraction(sf+1,S)
+          assert sqrt_lo*sqrt_lo <= N < sqrt_hi*sqrt_hi
+          alpha_lo=2*pi_lo/sqrt_hi
+          alpha_hi=2*pi_hi/sqrt_lo
+          P=150
+          def frac_dec(fr, rounding):
+              with localcontext(Context(prec=P, rounding=rounding)):
+                  return Decimal(fr.numerator)/Decimal(fr.denominator)
+          alo=frac_dec(alpha_lo,ROUND_FLOOR)
+          ahi=frac_dec(alpha_hi,ROUND_CEILING)
+          with localcontext(Context(prec=P, rounding=ROUND_HALF_EVEN)):
+              rlo0=(-ahi).exp(); rhi0=(-alo).exp()
+          def ulp(x): return Decimal(1).scaleb(x.as_tuple().exponent)
+          with localcontext(Context(prec=P, rounding=ROUND_FLOOR)):
+              rlo=rlo0-2*ulp(rlo0)
+          with localcontext(Context(prec=P, rounding=ROUND_CEILING)):
+              rhi=rhi0+2*ulp(rhi0)
+          assert Decimal(0)<rlo<rhi<Decimal(1)
+          down=Context(prec=P,rounding=ROUND_FLOOR)
+          up=Context(prec=P,rounding=ROUND_CEILING)
+          plo=Decimal(1); phi=Decimal(1); slo=Decimal(0); shi=Decimal(0)
+          for n,a in enumerate(coeffs,1):
+              plo=down.multiply(plo,rlo); phi=up.multiply(phi,rhi)
+              if a>=0:
+                  tl=down.divide(down.multiply(Decimal(a),plo),Decimal(n))
+                  th=up.divide(up.multiply(Decimal(a),phi),Decimal(n))
+              else:
+                  tl=down.divide(down.multiply(Decimal(a),phi),Decimal(n))
+                  th=up.divide(up.multiply(Decimal(a),plo),Decimal(n))
+              slo=down.add(slo,tl); shi=up.add(shi,th)
+          phi_next=up.multiply(phi,rhi)
+          denom=down.subtract(Decimal(1),rhi)
+          tail=up.divide(up.multiply(Decimal(4),phi_next),denom)
+          partial_lo=down.multiply(Decimal(2),slo)
+          partial_hi=up.multiply(Decimal(2),shi)
+          Llo=down.subtract(partial_lo,tail)
+          Lhi=up.add(partial_hi,tail)
+          assert Llo>0
+          cert={
+            'curve_ainvs':[0,64739779205,0,1041515185698207360000,0],
+            'conductor':N,'root_number':1,'M':M,
+            'alpha_lower_decimal':str(alo),'alpha_upper_decimal':str(ahi),
+            'r_lower':str(rlo),'r_upper':str(rhi),
+            'partial_lower':str(partial_lo),'partial_upper':str(partial_hi),
+            'tail_abs_upper':str(tail),'L_lower':str(Llo),'L_upper':str(Lhi),
+            'coefficient_sha256':hashlib.sha256(coeff_text.encode()).hexdigest(),
+            'method':'exact PARI ellan coefficients; 150-digit directed Decimal arithmetic; exp padded by two ulps; Deligne plus d(n)<=2sqrt(n) geometric tail'
+          }
+          Path('results/lvalue_interval.json').write_text(json.dumps(cert,indent=2)+'\n')
+          Path('results/lvalue_interval.txt').write_text(f'L_LOWER={Llo}\nL_UPPER={Lhi}\nTAIL_UPPER={tail}\nCOEFF_SHA256={cert["coefficient_sha256"]}\n')
+          print(Path('results/lvalue_interval.txt').read_text(),end='')
+          PY
+      - name: Independent Frobenius spot checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import ast,json
+          from pathlib import Path
+          coeffs=ast.literal_eval(Path('results/an.gpvec').read_text())
+          A=34878787205; B=29860992000
+          primes=[11,13,19,29,31,37,43,53,59,61,71,83,89,97,101,109,127,131,139,149,151,163,173,181,191,199,211,223,229,239]
+          bad={2,3,5,7,17,23,79,401}
+          out=[]
+          for p in primes:
+              if p in bad: continue
+              s=0
+              for x in range(p):
+                  v=(x*(x+A)*(x+B))%p
+                  chi=0 if v==0 else (1 if pow(v,(p-1)//2,p)==1 else -1)
+                  s+=chi
+              ap=-s
+              assert coeffs[p-1]==ap,(p,coeffs[p-1],ap)
+              out.append({'p':p,'a_p':ap,'points':p+1-ap})
+          Path('results/spot_checks.json').write_text(json.dumps(out,indent=2)+'\n')
+          print('SPOT_CHECKS=',len(out))
+          PY
+      - name: Hash results
+        run: sha256sum results/* | tee results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perfect-cuboid-d5-rigorous-lvalue
+          path: results/
+          if-no-files-found: error
