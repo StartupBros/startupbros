@@ -1,0 +1,46 @@
+name: perfect-cuboid-e10p-modsym
+
+on:
+  push:
+    branches:
+      - math/perfect-cuboid-e10p-modsym
+
+jobs:
+  exact-modular-symbol:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PARI/GP
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pari-gp pari-elldata
+      - name: Compute exact central modular symbol
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          cat > /tmp/run.gp <<'GP'
+          default(parisize,512000000);
+          default(parisizemax,6000000000);
+          E0=ellinit([0,1608010,0,645450288000,0]);
+          E=ellminimalmodel(E0);
+          print("GLOBALRED=",ellglobalred(E));
+          print("ROOT=",ellrootno(E));
+          [M,xp]=msfromell(E,1);
+          v=mseval(M,xp,[oo,0]);
+          print("MODSYM_0_INF=",v);
+          print("ANALYTIC=",ellanalyticrank(E));
+          quit;
+          GP
+          GP_COLORS='' gp -q /tmp/run.gp > results/modsym.txt 2>&1
+          cat results/modsym.txt
+          ! grep -Eq '\*\*\*|syntax error|incorrect type|at top-level|stack overflows' results/modsym.txt
+          grep -Eq '^MODSYM_0_INF=-?[0-9]+(/[0-9]+)?$' results/modsym.txt
+          ! grep -Eq '^MODSYM_0_INF=0$' results/modsym.txt
+          sha256sum results/modsym.txt > results/modsym.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perfect-cuboid-e10p-modsym
+          path: results/
+          if-no-files-found: error
