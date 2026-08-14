@@ -1,0 +1,39 @@
+name: perfect-cuboid-d5-second-quotient
+on:
+  push:
+    branches: [math/perfect-cuboid-d5-second-quotient]
+permissions:
+  contents: read
+jobs:
+  exact-rank:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: K5P
+            ainvs: '[0,97012293605,0,3130830642344390412000,33612313828264071079785984000000]'
+          - label: K5M
+            ainvs: '[0,32467264805,0,-1047800270947975692000,-33612313828264071079785984000000]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install eclib
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y eclib-tools
+      - name: Exact descent ${{ matrix.label }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          printf '%s\n' '${{ matrix.ainvs }}' | mwrank -q -v 1 -l -o -p 100 -b 10 -S -1 > results/${{ matrix.label }}.txt 2>&1
+          cat results/${{ matrix.label }}.txt
+          ! grep -qiE 'error|failed|The rank has not been completely determined|only a lower bound' results/${{ matrix.label }}.txt
+          grep -Eq 'Rank = [0-9]+|rank\(E\) = [0-9]+' results/${{ matrix.label }}.txt
+          grep -q 'The rank and full Mordell-Weil basis have been determined unconditionally.' results/${{ matrix.label }}.txt
+          sha256sum results/${{ matrix.label }}.txt > results/${{ matrix.label }}.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perfect-cuboid-${{ matrix.label }}
+          path: results/
+          if-no-files-found: error
