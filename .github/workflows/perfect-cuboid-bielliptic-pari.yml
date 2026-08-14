@@ -1,0 +1,59 @@
+name: perfect-cuboid-bielliptic-pari
+
+on:
+  push:
+    branches:
+      - math/perfect-cuboid-bielliptic-pari
+
+jobs:
+  pari-rank:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: E5P
+            a2: 804005
+            a4: 161362572000
+          - label: E5M
+            a2: 31205
+            a4: -161362572000
+          - label: E10P
+            a2: 1608010
+            a4: 645450288000
+          - label: E10M
+            a2: 62410
+            a4: -645450288000
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PARI/GP
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pari-gp pari-elldata
+      - name: Exact PARI discriminator ${{ matrix.label }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          cat > /tmp/run.gp <<'GP'
+          default(parisizemax,4000000000);
+          E=ellinit([0,AA2,0,AA4,0]);
+          print("LABEL=LBL");
+          print("ROOT=",ellrootno(E));
+          print("TORSION=",elltors(E));
+          print("RANK=",ellrank(E));
+          quit;
+          GP
+          sed -i 's/AA2/${{ matrix.a2 }}/g; s/AA4/${{ matrix.a4 }}/g; s/LBL/${{ matrix.label }}/g' /tmp/run.gp
+          GP_COLORS='' gp -q /tmp/run.gp > results/${{ matrix.label }}.txt 2>&1
+          cat results/${{ matrix.label }}.txt
+          ! grep -Eq '\*\*\*|syntax error|incorrect type|at top-level' results/${{ matrix.label }}.txt
+          grep -q '^LABEL=${{ matrix.label }}$' results/${{ matrix.label }}.txt
+          grep -Eq '^RANK=\[[0-9]+, [0-9]+,' results/${{ matrix.label }}.txt
+          sha256sum results/${{ matrix.label }}.txt > results/${{ matrix.label }}.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perfect-cuboid-pari-${{ matrix.label }}
+          path: results/
+          if-no-files-found: error
