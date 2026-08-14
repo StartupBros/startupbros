@@ -1,0 +1,41 @@
+name: perfect-cuboid-d5-genus3-pari
+on:
+  push:
+    branches: [math/perfect-cuboid-d5-genus3-pari]
+permissions:
+  contents: read
+jobs:
+  pari:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PARI/GP
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pari-gp pari-elldata
+      - name: Exact metadata and analytic discriminator
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          cat > /tmp/run.gp <<'GP'
+          default(parisizemax,4000000000);
+          E=ellinit([0,64739779205,0,1041515185698207360000,0]);
+          print("GLOBALRED=",ellglobalred(E));
+          print("ROOT=",ellrootno(E));
+          print("TORSION=",elltors(E));
+          print("RANK=",ellrank(E));
+          print("ANALYTIC=",ellanalyticrank(E));
+          quit;
+          GP
+          GP_COLORS='' gp -q /tmp/run.gp > results/pari.txt 2>&1
+          cat results/pari.txt
+          ! grep -Eq '\*\*\*|syntax error|incorrect type|at top-level|stack overflows' results/pari.txt
+          grep -Eq '^ROOT=-?1$' results/pari.txt
+          grep -Eq '^ANALYTIC=\[[0-9]+,' results/pari.txt
+          sha256sum results/pari.txt > results/pari.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perfect-cuboid-d5-genus3-pari
+          path: results/
+          if-no-files-found: error
