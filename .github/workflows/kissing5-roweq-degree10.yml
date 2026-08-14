@@ -1,0 +1,136 @@
+name: kissing5-roweq-degree10
+
+on:
+  push:
+    branches:
+      - kissing5-relay-20260814
+    paths:
+      - .github/workflows/kissing5-roweq-degree10.yml
+  workflow_dispatch:
+
+jobs:
+  roweq-degree10:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install CSDP and gdown
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y coinor-csdp unzip python3-pip
+          python3 -m pip install --user --break-system-packages gdown
+
+      - name: Download, audit, and exactly row-equilibrate
+        run: |
+          set -euxo pipefail
+          mkdir -p results
+          "$HOME/.local/bin/gdown" 11I3-NbTLH6-VkuuLGo4XvxDc_cp4Re2h -O results/kissing_5_10_10.zip
+          echo '98d26bdae8e6d2aa573234ad6043caac9cb1978748a19729ea8189cae859824c  results/kissing_5_10_10.zip' | sha256sum -c -
+          unzip -o results/kissing_5_10_10.zip -d results
+          cat > results/roweq.py <<'PY'
+          from pathlib import Path
+          from fractions import Fraction
+          from decimal import Decimal, localcontext
+          import hashlib, json
+
+          src=Path('results/kissing_5_10_10.dat-s')
+          dst=Path('results/kissing_5_10_10_roweq.dat-s')
+          def F(s): return Fraction(Decimal(s))
+          def dec(q):
+              if q.denominator==1: return str(q.numerator)
+              with localcontext() as c:
+                  c.prec=100
+                  s=format(Decimal(q.numerator)/Decimal(q.denominator),'f').rstrip('0').rstrip('.')
+                  return s or '0'
+          with src.open() as f:
+              m=int(f.readline()); nb=int(f.readline()); blocks=f.readline().strip()
+              b=[F(x) for x in f.readline().split()]
+              rows=[line.split() for line in f if len(line.split())==5]
+          mx=[Fraction(0)]*(m+1)
+          for i,x in enumerate(b,1): mx[i]=abs(x)
+          for p in rows:
+              mat=int(p[0])
+              if mat>0: mx[mat]=max(mx[mat],abs(F(p[4])))
+          scales=[Fraction(1)]*(m+1); exps=[0]*(m+1)
+          for i in range(1,m+1):
+              e=mx[i].numerator.bit_length()-mx[i].denominator.bit_length()
+              while Fraction(2)**e < mx[i]: e+=1
+              while Fraction(2)**(e-1) >= mx[i]: e-=1
+              exps[i]=-e; scales[i]=Fraction(2)**(-e)
+          with dst.open('w') as f:
+              f.write(f'{m}\n{nb}\n{blocks}\n')
+              f.write(' '.join(dec(b[i-1]*scales[i]) for i in range(1,m+1))+'\n')
+              for p in rows:
+                  mat=int(p[0]); q=F(p[4])*(scales[mat] if mat>0 else 1)
+                  f.write(' '.join(p[:4]+[dec(q)])+'\n')
+          # Independent exact equivalence audit.
+          with src.open() as a, dst.open() as c:
+              ha=[next(a).strip() for _ in range(4)]; hc=[next(c).strip() for _ in range(4)]
+              assert ha[:3]==hc[:3]
+              ba=[F(x) for x in ha[3].split()]; bc=[F(x) for x in hc[3].split()]
+              assert all(bc[i-1]==ba[i-1]*scales[i] for i in range(1,m+1))
+              count=0
+              for la,lc in zip(a,c):
+                  pa=la.split(); pc=lc.split(); assert pa[:4]==pc[:4]
+                  mat=int(pa[0]); qa=F(pa[4]); qc=F(pc[4])
+                  assert qc==qa*(scales[mat] if mat>0 else 1)
+                  count+=1
+          after=[mx[i]*scales[i] for i in range(1,m+1)]
+          assert min(after)>=Fraction(1,2) and max(after)<=1
+          out={'status':'PASS','constraints':m,'entries':count,
+               'max_before':str(max(mx[1:])),'min_before':str(min(mx[1:])),
+               'max_after':str(max(after)),'min_after':str(min(after)),
+               'exponent_min':min(exps[1:]),'exponent_max':max(exps[1:]),
+               'unscaled_sha256':hashlib.sha256(src.read_bytes()).hexdigest(),
+               'scaled_sha256':hashlib.sha256(dst.read_bytes()).hexdigest()}
+          Path('results/roweq_audit.json').write_text(json.dumps(out,indent=2)); print(json.dumps(out,indent=2))
+          PY
+          python3 results/roweq.py
+
+      - name: Solve row-equilibrated benchmark
+        run: |
+          set +e
+          /usr/bin/time -v csdp results/kissing_5_10_10_roweq.dat-s results/kissing_5_10_10_roweq.sol 2>&1 | tee results/roweq_csdp.log
+          status=${PIPESTATUS[0]}
+          echo "$status" > results/csdp_exit_status.txt
+          exit 0
+
+      - name: Parse row-equilibrated outcome
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,re,hashlib
+          s=Path('results/roweq_csdp.log').read_text()
+          pats={'primal_objective':r'Primal objective value\s*:\s*([-+0-9.eE]+)',
+                'dual_objective':r'Dual objective value\s*:\s*([-+0-9.eE]+)',
+                'relative_primal_infeasibility':r'Relative primal infeasibility\s*:\s*([-+0-9.eE]+)',
+                'relative_dual_infeasibility':r'Relative dual infeasibility\s*:\s*([-+0-9.eE]+)',
+                'real_relative_gap':r'Real Relative Gap\s*:\s*([-+0-9.eE]+)',
+                'xz_relative_gap':r'XZ Relative Gap\s*:\s*([-+0-9.eE]+)'}
+          out={}
+          for k,p in pats.items():
+              z=re.findall(p,s,re.I)
+              if z: out[k]=float(z[-1])
+          it=re.findall(r'Iter:\s*(\d+)',s)
+          out['iterations']=int(it[-1]) if it else None
+          out['success']='Success: SDP solved' in s
+          out['partial_success']='Partial Success:' in s
+          out['edge_failure']='Stuck at edge of primal feasibility' in s
+          out['csdp_exit_status']=int(Path('results/csdp_exit_status.txt').read_text())
+          if Path('results/kissing_5_10_10_roweq.sol').exists():
+              out['solution_sha256']=hashlib.sha256(Path('results/kissing_5_10_10_roweq.sol').read_bytes()).hexdigest()
+          out['status']='RECORDED'
+          Path('results/roweq_calibration.json').write_text(json.dumps(out,indent=2,sort_keys=True))
+          print(json.dumps(out,indent=2,sort_keys=True))
+          PY
+          sha256sum results/* > results/SHA256SUMS.txt || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kissing5-roweq-degree10
+          path: results/
+          if-no-files-found: error
+          retention-days: 30
