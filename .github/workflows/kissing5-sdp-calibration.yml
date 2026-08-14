@@ -1,0 +1,129 @@
+name: kissing5-sdp-calibration
+
+on:
+  push:
+    branches:
+      - kissing5-relay-20260814
+    paths:
+      - .github/workflows/kissing5-sdp-calibration.yml
+  workflow_dispatch:
+
+jobs:
+  calibrate-degree10:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install CSDP and download helper
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y coinor-csdp unzip python3-pip
+          python3 -m pip install --user --break-system-packages gdown
+          dpkg-query -W coinor-csdp
+
+      - name: Download and audit public degree-10 instance
+        run: |
+          set -euxo pipefail
+          mkdir -p results
+          "$HOME/.local/bin/gdown" --id 11I3-NbTLH6-VkuuLGo4XvxDc_cp4Re2h -O results/kissing_5_10_10.zip
+          echo '98d26bdae8e6d2aa573234ad6043caac9cb1978748a19729ea8189cae859824c  results/kissing_5_10_10.zip' | sha256sum -c -
+          unzip -o results/kissing_5_10_10.zip -d results
+          python3 - <<'PY'
+          from pathlib import Path
+          import json, hashlib
+          p=Path('results/kissing_5_10_10.dat-s')
+          lines=p.read_text().splitlines()
+          m=int(lines[0].strip()); nblocks=int(lines[1].strip())
+          blocks=list(map(int,lines[2].split())); objective=list(map(float,lines[3].split()))
+          expected=[-10,2,11,10,9,8,7,6,5,4,3,2,1,11,10,286,220,220,220,165]
+          assert (m,nblocks,blocks,len(lines)-4)==(1792,20,expected,345885)
+          assert objective[0]==-1 and all(x==0 for x in objective[1:])
+          out={'status':'PASS','constraints':m,'block_count':nblocks,'blocks':blocks,
+               'objective_first':objective[0],'objective_nonzero_count':sum(x!=0 for x in objective),
+               'entry_lines':len(lines)-4,'instance_sha256':hashlib.sha256(p.read_bytes()).hexdigest()}
+          Path('results/independent_header_audit.json').write_text(json.dumps(out,indent=2))
+          print(json.dumps(out,indent=2))
+          PY
+
+      - name: Adversarially calibrate SDPA sign convention
+        run: |
+          set -euxo pipefail
+          cat > results/toy_positive.dat-s <<'EOF'
+          1
+          2
+          1 1
+          1
+          0 1 1 1 2
+          0 2 1 1 1
+          1 1 1 1 1
+          1 2 1 1 -1
+          EOF
+          cat > results/toy_negative.dat-s <<'EOF'
+          1
+          2
+          1 1
+          -1
+          0 1 1 1 2
+          0 2 1 1 1
+          1 1 1 1 1
+          1 2 1 1 -1
+          EOF
+          csdp results/toy_positive.dat-s results/toy_positive.sol 2>&1 | tee results/toy_positive.log
+          csdp results/toy_negative.dat-s results/toy_negative.sol 2>&1 | tee results/toy_negative.log
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,re
+          def vals(path):
+              s=Path(path).read_text(); out={}
+              for k,p in {'primal':r'Primal objective value\s*:\s*([-+0-9.eE]+)',
+                          'dual':r'Dual objective value\s*:\s*([-+0-9.eE]+)'}.items():
+                  m=re.findall(p,s,re.I)
+                  if m: out[k]=float(m[-1])
+              return out
+          pos=vals('results/toy_positive.log'); neg=vals('results/toy_negative.log')
+          assert abs(pos['primal']-2)<1e-7 and abs(pos['dual']-2)<1e-7, pos
+          assert abs(neg['primal']-1)<1e-7 and abs(neg['dual']-1)<1e-7, neg
+          out={'status':'PASS','positive_objective':pos,'negative_objective':neg}
+          Path('results/sign_calibration.json').write_text(json.dumps(out,indent=2)); print(out)
+          PY
+
+      - name: Solve public degree-10 benchmark
+        run: |
+          set -euxo pipefail
+          /usr/bin/time -v csdp results/kissing_5_10_10.dat-s results/kissing_5_10_10.sol 2>&1 | tee results/degree10_csdp.log
+
+      - name: Parse exact calibration delta
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,re,hashlib
+          s=Path('results/degree10_csdp.log').read_text()
+          pats={'primal_objective':r'Primal objective value\s*:\s*([-+0-9.eE]+)',
+                'dual_objective':r'Dual objective value\s*:\s*([-+0-9.eE]+)',
+                'relative_primal_infeasibility':r'Relative primal infeasibility\s*:\s*([-+0-9.eE]+)',
+                'relative_dual_infeasibility':r'Relative dual infeasibility\s*:\s*([-+0-9.eE]+)',
+                'real_relative_gap':r'Real Relative Gap\s*:\s*([-+0-9.eE]+)',
+                'relative_gap':r'Relative Gap\s*:\s*([-+0-9.eE]+)'}
+          out={}
+          for k,p in pats.items():
+              m=re.findall(p,s,re.I)
+              if m: out[k]=float(m[-1])
+          out['success_marker']='Success: SDP solved' in s
+          out['solution_sha256']=hashlib.sha256(Path('results/kissing_5_10_10.sol').read_bytes()).hexdigest()
+          assert out['success_marker'] and 'primal_objective' in out and 'dual_objective' in out, out
+          out['absolute_objective_gap']=abs(out['primal_objective']-out['dual_objective'])
+          out['status']='PASS'
+          Path('results/degree10_calibration.json').write_text(json.dumps(out,indent=2,sort_keys=True))
+          print(json.dumps(out,indent=2,sort_keys=True))
+          PY
+          sha256sum results/* > results/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kissing5-degree10-calibration
+          path: results/
+          if-no-files-found: error
+          retention-days: 30
