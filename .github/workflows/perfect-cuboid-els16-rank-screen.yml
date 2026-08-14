@@ -1,0 +1,90 @@
+name: perfect-cuboid-els16-rank-screen
+on:
+  push:
+    branches: [math/perfect-cuboid-els16-rank-screen]
+permissions:
+  contents: read
+jobs:
+  rank-screen:
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        delta: [1,5,6,14,21,30,46,69,70,105,161,230,345,805,966,4830]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install exact tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y eclib-tools pari-gp
+      - name: Construct quotient models exactly
+        env:
+          DELTA: ${{ matrix.delta }}
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          python3 - <<'PY'
+          import json, os
+          d = int(os.environ['DELTA'])
+          alpha = 417605
+          D = 772800
+          assert D % d == 0
+          k = D // d
+          polys = {
+              'E0': f'({d})*x^4+({4*alpha})*x^3+({2*d*k*k})*x^2+({4*alpha*k*k})*x+({d*k**4})',
+              'EP': f'({d})*x^4+({4*alpha-4*d*k})*x^2+({-2*k*(4*alpha-2*d*k)})',
+              'EM': f'({d})*x^4+({4*alpha+4*d*k})*x^2+({2*k*(4*alpha+2*d*k)})',
+          }
+          lines = []
+          for name, poly in polys.items():
+              lines += [
+                  f'F_{name}={poly};',
+                  f'A_{name}=ellfromeqn(y^2-F_{name});',
+                  f'print("{name}_MODEL=",A_{name});',
+                  f'write("results/{name}.txt",A_{name});',
+                  f'E_{name}=ellinit(A_{name});',
+                  f'print("{name}_RANK=",ellrank(E_{name}));',
+                  f'print("{name}_TORSION=",elltors(E_{name}));',
+              ]
+          open('/tmp/run.gp','w').write('\n'.join(lines) + '\nquit;\n')
+          open('results/data.json','w').write(json.dumps({
+              'delta': d,
+              'k': k,
+              'polynomials': polys,
+          }, indent=2) + '\n')
+          PY
+          GP_COLORS='' gp -q /tmp/run.gp > results/pari.txt 2>&1
+          cat results/pari.txt
+          ! grep -Eq '^\s*\*\*|syntax error|incorrect type|at top-level|stack overflows' results/pari.txt
+          test "$(grep -c '_MODEL=' results/pari.txt)" -eq 3
+          test "$(grep -c '_RANK=' results/pari.txt)" -eq 3
+      - name: Exact saturated eclib descents
+        run: |
+          set -euo pipefail
+          for name in E0 EP EM; do
+            timeout 300s sh -c "cat results/${name}.txt | mwrank -q -v 1 -l -o -p 100 -b 10 -S -1" > "results/${name}_mwrank.txt" 2>&1
+            cat "results/${name}_mwrank.txt"
+            ! grep -qiE 'error|failed|The rank has not been completely determined|only a lower bound' "results/${name}_mwrank.txt"
+            grep -q 'The rank and full Mordell-Weil basis have been determined unconditionally.' "results/${name}_mwrank.txt"
+          done
+          python3 - <<'PY'
+          import json,re
+          out={}
+          for name in ('E0','EP','EM'):
+              text=open(f'results/{name}_mwrank.txt').read()
+              m=re.search(r'rank\(E\) =\s*(\d+)',text)
+              if not m:
+                  m=re.search(r'Rank =\s*(\d+)',text)
+              if not m:
+                  raise SystemExit(f'no exact rank parsed for {name}')
+              out[name]=int(m.group(1))
+          open('results/ranks.json','w').write(json.dumps(out,sort_keys=True)+'\n')
+          print(out)
+          PY
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: els16-delta-${{ matrix.delta }}
+          path: results/
+          if-no-files-found: error
