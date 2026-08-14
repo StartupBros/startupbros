@@ -1,0 +1,60 @@
+name: perfect-cuboid-h5-three-elliptic-screen
+on:
+  push:
+    branches: [math/perfect-cuboid-h5-three-elliptic-screen]
+permissions:
+  contents: read
+jobs:
+  screen:
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        delta: [1,2,3,5,6,7,10,14,15,21,23,30,35,42,46,69,70,105,115,138,161,210,230,322,345,483,690,805,966,1610,2415,4830]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install exact tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y eclib-tools pari-gp pari-elldata
+      - name: Construct three quotient Jacobians exactly
+        env:
+          DELTA: ${{ matrix.delta }}
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          python3 - <<'PY'
+          import json,os
+          d=int(os.environ['DELTA']); alpha=417605; D=772800
+          assert D%d==0
+          k=D//d
+          # Genus-3 cover: V^2=(l^4+k^2)(d(l^4+k^2)+4 alpha l^2).
+          # Three elliptic quotient quartics under l->-l, l->k/l, l->-k/l.
+          polys={
+            'E0': f'({d})*x^4+({4*alpha})*x^3+({2*d*k*k})*x^2+({4*alpha*k*k})*x+({d*k**4})',
+            'EP': f'({d})*x^4+({4*alpha-4*d*k})*x^2+({-2*k*(4*alpha-2*d*k)})',
+            'EM': f'({d})*x^4+({4*alpha+4*d*k})*x^2+({2*k*(4*alpha+2*d*k)})'
+          }
+          open('/tmp/run.gp','w').write("default(parisizemax,4000000000);\n"+''.join([
+            f'F_{name}={poly}; A_{name}=ellfromeqn(y^2-F_{name}); print("{name}_MODEL=",A_{name}); write("results/{name}.txt",A_{name}); E_{name}=ellinit(A_{name}); print("{name}_RANK=",ellrank(E_{name})); print("{name}_TORSION=",elltors(E_{name}));\n'
+            for name,poly in polys.items()])+'quit;\n')
+          open('results/data.json','w').write(json.dumps({'delta':d,'k':k,'polynomials':polys},indent=2)+'\n')
+          PY
+          GP_COLORS='' gp -q /tmp/run.gp > results/pari.txt 2>&1
+          cat results/pari.txt
+          ! grep -Eq '\*\*\*|syntax error|incorrect type|at top-level|stack overflows' results/pari.txt
+      - name: Exact eclib descents
+        run: |
+          set -euo pipefail
+          for name in E0 EP EM; do
+            timeout 240s sh -c "cat results/${name}.txt | mwrank -q -v 1 -l -o -p 100 -b 10 -S -1" > "results/${name}_mwrank.txt" 2>&1 || true
+            echo "===== ${name} ====="
+            cat "results/${name}_mwrank.txt"
+          done
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: h5-three-elliptics-${{ matrix.delta }}
+          path: results/
+          if-no-files-found: error
