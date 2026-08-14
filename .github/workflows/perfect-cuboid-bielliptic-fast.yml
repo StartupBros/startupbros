@@ -1,0 +1,43 @@
+name: perfect-cuboid-bielliptic-fast
+
+on:
+  push:
+    branches:
+      - math/perfect-cuboid-bielliptic-fast
+
+jobs:
+  exact-rank:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: E5P
+            ainvs: '[0,804005,0,161362572000,0]'
+          - label: E10P
+            ainvs: '[0,1608010,0,645450288000,0]'
+          - label: E10M
+            ainvs: '[0,62410,0,-645450288000,0]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install eclib
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y eclib-tools
+      - name: Exact descent ${{ matrix.label }} with bounded quartic search
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          printf '%s\n' '${{ matrix.ainvs }}' | mwrank -q -v 1 -l -o -p 100 -b 8 -S -1 > results/${{ matrix.label }}.txt 2>&1
+          cat results/${{ matrix.label }}.txt
+          ! grep -qiE 'error|failed|The rank has not been completely determined|only a lower bound' results/${{ matrix.label }}.txt
+          grep -Eq 'Rank = [0-9]+|rank\(E\) = [0-9]+' results/${{ matrix.label }}.txt
+          grep -q 'The rank and full Mordell-Weil basis have been determined unconditionally.' results/${{ matrix.label }}.txt
+          sha256sum results/${{ matrix.label }}.txt > results/${{ matrix.label }}.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perfect-cuboid-fast-${{ matrix.label }}
+          path: results/
+          if-no-files-found: error
