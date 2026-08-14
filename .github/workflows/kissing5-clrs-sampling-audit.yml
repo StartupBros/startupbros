@@ -1,0 +1,142 @@
+name: kissing5-clrs-sampling-audit
+
+on:
+  push:
+    branches:
+      - kissing5-relay-20260814
+    paths:
+      - .github/workflows/kissing5-clrs-sampling-audit.yml
+  workflow_dispatch:
+
+jobs:
+  audit-sampling:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.12.6'
+
+      - name: Clone and instantiate fixed solver commit
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/nanleij/ClusteredLowRankSolver.jl.git clrs
+          git -C clrs checkout 09ac81aed031bdea714832cf515244f6eb223531
+          julia --project=clrs -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+
+      - name: Exact modular injectivity audit and adversarial rank-drop test
+        run: |
+          set -euxo pipefail
+          mkdir -p results
+          cat > audit_sampling.jl <<'JULIA'
+          using Random, Nemo, SHA
+          using ClusteredLowRankSolver
+
+          const N3 = 14
+          Random.seed!(1935)
+
+          exponents = Tuple{Int,Int,Int}[]
+          degrees = Int[]
+          for deg in 0:N3, k in 0:div(deg,3), j in 0:div(deg-3k,2)
+              push!(exponents, (deg-3k-2j, j, k))
+              push!(degrees, deg)
+          end
+          tmp = length(exponents)
+          @assert tmp == 147
+
+          cheb_points = [vcat(ClusteredLowRankSolver.sample_points_chebyshev(2N3+k, -1, 1)...) for k=0:2]
+          candidates = [[cheb_points[1][i+1], cheb_points[2][j+1], cheb_points[3][k+1]]
+                        for i=0:2N3 for j=0:2N3+1 for k=0:2N3+2]
+          chosen = sort(candidates[shuffle(1:length(candidates))[1:tmp]])
+          sample_nums = [[floor(BigInt, 10^4*x) for x in s] for s in chosen]
+          @assert length(unique(sample_nums)) == tmp
+
+          fingerprint_text = join([join(string.(s), ",") for s in sample_nums], ";")
+          sample_sha256 = bytes2hex(sha256(fingerprint_text))
+
+          function basis_value(F, nums, exp)
+              invd = inv(F(10000))
+              u, v, t = (F(nums[i]) * invd for i in 1:3)
+              e1 = u + v + t
+              e2 = u*v + v*t + u*t
+              e3 = u*v*t
+              a,b,c = exp
+              return e1^a * e2^b * e3^c
+          end
+
+          function eval_matrix(F, samples)
+              vals = elem_type(F)[]
+              sizehint!(vals, tmp*tmp)
+              for s in samples, e in exponents
+                  push!(vals, basis_value(F, s, e))
+              end
+              return matrix(F, tmp, tmp, vals)
+          end
+
+          primes = [1000003, 1000033]
+          ranks = Int[]
+          dets = String[]
+          corrupted_ranks = Int[]
+          column_corrupted_ranks = Int[]
+
+          for p in primes
+              F = GF(p)
+              M = eval_matrix(F, sample_nums)
+              r = rank(M)
+              d = det(M)
+              @assert r == tmp
+              @assert !iszero(d)
+              push!(ranks, r)
+              push!(dets, string(d))
+
+              bad_samples = deepcopy(sample_nums)
+              bad_samples[end] = copy(bad_samples[1])
+              Mbad = eval_matrix(F, bad_samples)
+              rb = rank(Mbad)
+              @assert rb == tmp-1
+              push!(corrupted_ranks, rb)
+
+              Mcol = deepcopy(M)
+              for i in 1:tmp
+                  Mcol[i,tmp] = Mcol[i,1]
+              end
+              rc = rank(Mcol)
+              @assert rc == tmp-1
+              push!(column_corrupted_ranks, rc)
+          end
+
+          degree_hist = Dict(d => count(==(d), degrees) for d in sort(unique(degrees)))
+          hist_text = join(["\"$(d)\":$(degree_hist[d])" for d in sort(collect(keys(degree_hist)))], ",")
+
+          open("results/degree14_sampling_injectivity.json", "w") do io
+              println(io, "{")
+              println(io, "  \"status\": \"PASS\",")
+              println(io, "  \"solver_commit\": \"09ac81aed031bdea714832cf515244f6eb223531\",")
+              println(io, "  \"seed\": 1935,")
+              println(io, "  \"basis_dimension\": $(tmp),")
+              println(io, "  \"candidate_grid_size\": $(length(candidates)),")
+              println(io, "  \"distinct_selected_samples\": $(length(unique(sample_nums))),")
+              println(io, "  \"sample_numerator_sha256\": \"$(sample_sha256)\",")
+              println(io, "  \"primes\": [$(join(primes, ","))],")
+              println(io, "  \"ranks\": [$(join(ranks, ","))],")
+              println(io, "  \"determinant_residues\": [\"$(join(dets, "\",\""))\"],")
+              println(io, "  \"duplicate_sample_ranks\": [$(join(corrupted_ranks, ","))],")
+              println(io, "  \"duplicate_basis_column_ranks\": [$(join(column_corrupted_ranks, ","))],")
+              println(io, "  \"weighted_degree_histogram\": {$(hist_text)},")
+              println(io, "  \"conclusion\": \"The 147 sampled evaluations are injective on the symmetric weighted-degree-at-most-14 basis; a duplicated sample or basis column drops rank to 146.\"")
+              println(io, "}")
+          end
+
+          println(read("results/degree14_sampling_injectivity.json", String))
+          JULIA
+          julia --project=clrs audit_sampling.jl
+          sha256sum results/* > results/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kissing5-clrs-sampling-audit
+          path: results/
+          if-no-files-found: error
+          retention-days: 30
