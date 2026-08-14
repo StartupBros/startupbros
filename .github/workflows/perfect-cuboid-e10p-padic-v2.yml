@@ -1,0 +1,47 @@
+name: perfect-cuboid-e10p-padic-v2
+
+on:
+  push:
+    branches:
+      - math/perfect-cuboid-e10p-padic-v2
+
+jobs:
+  padic-rank-zero:
+    strategy:
+      fail-fast: false
+      matrix:
+        prime: [11, 19]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PARI/GP
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pari-gp pari-elldata
+      - name: Compute low-precision p-adic BSD certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          cat > /tmp/run.gp <<'GP'
+          default(parisize,256000000);
+          default(parisizemax,6000000000);
+          E=ellinit([0,1608010,0,645450288000,0]);
+          p=PP;
+          print("P=",p);
+          print("AP=",ellap(E,p));
+          print("PADICBSD=",ellpadicbsd(E,p,5));
+          quit;
+          GP
+          sed -i 's/PP/${{ matrix.prime }}/g' /tmp/run.gp
+          GP_COLORS='' gp -q /tmp/run.gp > results/p${{ matrix.prime }}.txt 2>&1
+          cat results/p${{ matrix.prime }}.txt
+          ! grep -Eq '\*\*\*|syntax error|incorrect type|at top-level|stack overflows' results/p${{ matrix.prime }}.txt
+          grep -Eq '^PADICBSD=\[0,' results/p${{ matrix.prime }}.txt
+          sha256sum results/p${{ matrix.prime }}.txt > results/p${{ matrix.prime }}.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perfect-cuboid-e10p-v2-p${{ matrix.prime }}
+          path: results/
+          if-no-files-found: error
