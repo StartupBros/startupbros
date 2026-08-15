@@ -1,0 +1,54 @@
+name: perfect-cuboid-delta1-rank2-verify
+on:
+  push:
+    branches: [math/perfect-cuboid-delta1-rank2-verify]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PARI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pari-gp pari-elldata pari-seadata
+      - name: Exact independent rank and basis check
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          cat > /tmp/run.gp <<'GP'
+          default(realprecision,100);
+          default(parisizemax,4000000000);
+          E=ellinit([0,1194439680000,0,239738147958629376000000,286352756731497925108039680000000000]);
+          P1=[729884160000,1219213098547200000];
+          P2=[-1950553351028418951719511878814720000/9230586762599149889699521,14828833751120317212183669494738691924518514520166400000/28044258602357472486616354684436673569];
+          T=[-1194439680000,0];
+          if(!ellisoncurve(E,P1),error("P1 off curve"));
+          if(!ellisoncurve(E,P2),error("P2 off curve"));
+          if(!ellisoncurve(E,T),error("T off curve"));
+          print("RANK_WITH_POINTS=",ellrank(E,0,[P1,P2]));
+          H=ellheightmatrix(E,[P1,P2]);
+          print("HEIGHT_MATRIX=",H);
+          print("HEIGHT_DET=",matdet(H));
+          print("TORSION=",elltors(E));
+          print("ROOTNO=",ellrootno(E));
+          print("GLOBALRED=",ellglobalred(E));
+          S=ellsaturation(E,[P1,P2],100);
+          print("SATURATED_100=",S);
+          quit;
+          GP
+          GP_COLORS='' gp -q /tmp/run.gp > results/output.raw 2>&1
+          sed -r 's/\x1B\[[0-9;]*[mK]//g' results/output.raw > results/output.txt
+          cat results/output.txt
+          ! grep -Eq '\*\*\*|syntax error|incorrect type|at top-level|stack overflows' results/output.txt
+          grep -q '^RANK_WITH_POINTS=\[2, 2,' results/output.txt
+          grep -q '^TORSION=\[2, \[2\],' results/output.txt
+          grep -q '^ROOTNO=1$' results/output.txt
+          grep -q '^SATURATED_100=' results/output.txt
+          sha256sum results/output.raw results/output.txt > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: delta1-rank2-independent
+          path: results/
+          if-no-files-found: error
