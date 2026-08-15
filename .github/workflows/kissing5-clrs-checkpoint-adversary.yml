@@ -1,0 +1,66 @@
+name: kissing5-clrs-checkpoint-adversary
+
+on:
+  push:
+    branches:
+      - kissing5-relay-20260814
+    paths:
+      - .github/workflows/kissing5-clrs-checkpoint-adversary.yml
+  workflow_dispatch:
+
+jobs:
+  forced-timeout-checkpoint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.12.6'
+      - name: Clone fixed solver commit
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/nanleij/ClusteredLowRankSolver.jl.git clrs
+          git -C clrs checkout 09ac81aed031bdea714832cf515244f6eb223531
+          julia --project=clrs -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+      - name: Force timeout after periodic saves
+        run: |
+          set +e
+          mkdir -p results
+          timeout 12m julia --project=clrs <<'JULIA' 2>&1 | tee results/solve.log
+          include("clrs/examples/ThreePointBound.jl")
+          using .ThreePointBound, ClusteredLowRankSolver
+          ss=SaveSettings(iter_interval=2,only_last=true,save_name="results/adversarial_checkpoint")
+          three_point_spherical_codes(5,1//2,10,10;
+              prec=96,matmul_prec=80,maxiterations=100,
+              duality_gap_threshold=1e-30,
+              dual_error_threshold=1e-30,
+              primal_error_threshold=1e-30,
+              omega_d=10^3,omega_p=10^3,
+              save_settings=ss)
+          JULIA
+          echo ${PIPESTATUS[0]} > results/solver_exit_status.txt
+          exit 0
+      - name: Fail closed unless checkpoint survived and is parseable
+        run: |
+          set -euxo pipefail
+          test -s results/adversarial_checkpoint.jls
+          julia --project=clrs <<'JULIA' 2>&1 | tee results/recovery.log
+          using Serialization
+          dualsol,primalsol=deserialize("results/adversarial_checkpoint.jls")
+          @assert length(dualsol.matrixvars)>0
+          @assert length(primalsol.matrixvars)>0
+          println("RECOVERY_PASS")
+          println("DUAL_KEYS=",length(dualsol.matrixvars))
+          println("PRIMAL_KEYS=",length(primalsol.matrixvars))
+          println("DUAL_F0_SIZE=",size(dualsol.matrixvars[(:F,0)]))
+          println("PRIMAL_F0_SIZE=",size(primalsol.matrixvars[(:F,0)]))
+          JULIA
+          grep -q RECOVERY_PASS results/recovery.log
+          sha256sum results/* > results/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kissing5-clrs-checkpoint-adversary
+          path: results/
+          if-no-files-found: error
+          retention-days: 30
