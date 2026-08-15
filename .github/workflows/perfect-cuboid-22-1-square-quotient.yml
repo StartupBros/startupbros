@@ -1,0 +1,72 @@
+name: perfect-cuboid-22-1-square-quotient
+on:
+  push:
+    branches: [math/perfect-cuboid-22-1-square-quotient]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install exact tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pari-gp pari-elldata pari-seadata eclib-tools
+      - name: PARI exact descent
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          cat > /tmp/run.gp <<'GP'
+          default(realprecision,100);
+          default(parisizemax,4000000000);
+          E=ellinit([0,2026205,0,975674007000,125435609638416000]);
+          print("MODEL=",E[1..5]);
+          print("RANK=",ellrank(E));
+          print("TORSION=",elltors(E));
+          print("ROOTNO=",ellrootno(E));
+          print("GLOBALRED=",ellglobalred(E));
+          print("RATPTS=",ellratpoints(E,10^10));
+          quit;
+          GP
+          GP_COLORS='' gp -q /tmp/run.gp > results/pari.raw 2>&1
+          sed -r 's/\x1B\[[0-9;]*[mK]//g' results/pari.raw > results/pari.txt
+          cat results/pari.txt
+          ! grep -Eq 'syntax error|incorrect type|at top-level|stack overflows|  \*\*\*   at top-level' results/pari.txt
+      - name: Independent eclib descent
+        run: |
+          set -euo pipefail
+          echo '[0,2026205,0,975674007000,125435609638416000]' | mwrank -v 2 -p 100 > results/mwrank.txt 2>&1
+          cat results/mwrank.txt
+          ! grep -Eq 'syntax error|Segmentation|Aborted' results/mwrank.txt
+      - name: Independent point-count and square-abscissa audit
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' | tee results/adversarial.txt
+          from math import gcd, isqrt
+          a2=2026205; a4=975674007000; a6=125435609638416000
+          roots=[-212520,-425040,-1388645]
+          assert sum(roots)==-a2
+          assert roots[0]*roots[1]+roots[0]*roots[2]+roots[1]*roots[2]==a4
+          assert -roots[0]*roots[1]*roots[2]==a6
+          def count(p):
+              n=1
+              for x in range(p):
+                  r=(x*x*x+a2*x*x+a4*x+a6)%p
+                  if r==0: n+=1
+                  elif pow(r,(p-1)//2,p)==1: n+=2
+              return n
+          counts={p:count(p) for p in [11,13,17,19,23,29,31,37,41,43]}
+          print('COUNTS',counts)
+          g=0
+          for n in counts.values(): g=gcd(g,n)
+          print('TORSION_GCD',g)
+          print('VISIBLE_ROOTS',roots)
+          print('ROOT_SQUARES',[r>=0 and isqrt(r)**2==r for r in roots])
+          PY
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perfect-cuboid-22-1-square-quotient
+          path: results/
+          if-no-files-found: error
