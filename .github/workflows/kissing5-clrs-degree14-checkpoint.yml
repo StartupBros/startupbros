@@ -1,0 +1,135 @@
+name: kissing5-clrs-degree14-checkpoint
+
+on:
+  push:
+    branches:
+      - kissing5-relay-20260814
+    paths:
+      - .github/workflows/kissing5-clrs-degree14-checkpoint.yml
+  workflow_dispatch:
+
+jobs:
+  checkpointed-degree14:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 270
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.12.6'
+
+      - name: Clone and instantiate fixed solver commit
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/nanleij/ClusteredLowRankSolver.jl.git clrs
+          git -C clrs checkout 09ac81aed031bdea714832cf515244f6eb223531
+          julia --project=clrs -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+
+      - name: Run checkpointed 128-bit degree-14 solve
+        run: |
+          set +e
+          mkdir -p results
+          timeout 250m /usr/bin/time -v julia --project=clrs <<'JULIA' 2>&1 | tee results/solve.log
+          using Serialization, Printf
+          include("clrs/examples/ThreePointBound.jl")
+          using .ThreePointBound, ClusteredLowRankSolver
+
+          open("results/iterates.tsv", "w") do io
+              println(io, "iter\ttime\tmu\td_obj\tp_obj\tdual_gap\tD_error\td_error\tp_error\talpha_d\talpha_p")
+          end
+          cb = function(m)
+              open("results/iterates.tsv", "a") do io
+                  vals = (m.iter,m.time,m.mu,m.d_obj,m.p_obj,m.dual_gap,m.D_error,m.d_error,m.p_error,m.alpha_d,m.alpha_p)
+                  println(io, join(string.(vals), '\t'))
+              end
+          end
+          ss = SaveSettings(iter_interval=5, only_last=true, save_name="results/degree14_checkpoint")
+          result = three_point_spherical_codes(
+              5, 1//2, 14, 14;
+              prec=128,
+              matmul_prec=96,
+              maxiterations=55,
+              duality_gap_threshold=1e-6,
+              dual_error_threshold=1e-20,
+              primal_error_threshold=1e-10,
+              omega_d=10^3,
+              omega_p=10^3,
+              step_length_threshold=1e-20,
+              save_settings=ss,
+              iteration_callback=cb)
+          problem, dualsol, primalsol = result
+          serialize("results/degree14_returned.jls", (dualsol, primalsol))
+          println("RETURNED_PRIMAL_OBJECTIVE=", objvalue(problem, primalsol))
+          println("RETURNED_DUAL_OBJECTIVE=", dualobjvalue(problem, dualsol))
+          JULIA
+          status=${PIPESTATUS[0]}
+          echo "$status" > results/solver_exit_status.txt
+          exit 0
+
+      - name: Export latest checkpoint matrices and objective
+        run: |
+          set +e
+          julia --project=clrs <<'JULIA' 2>&1 | tee results/export.log
+          using Serialization, LinearAlgebra, Printf
+          include("clrs/examples/ThreePointBound.jl")
+          using .ThreePointBound, ClusteredLowRankSolver
+          path = isfile("results/degree14_returned.jls") ? "results/degree14_returned.jls" : "results/degree14_checkpoint.jls"
+          println("CHECKPOINT_PATH=", path)
+          dualsol, primalsol = deserialize(path)
+          println("DUALSOL_FIELDS=", fieldnames(typeof(dualsol)))
+          println("PRIMALSOL_FIELDS=", fieldnames(typeof(primalsol)))
+          println("DUAL_MATRIX_KEYS=", sort!(collect(keys(dualsol.matrixvars)), by=string))
+          println("PRIMAL_MATRIX_KEYS=", sort!(collect(keys(primalsol.matrixvars)), by=string))
+
+          function direct_obj(sol)
+              z = BigFloat(1)
+              if haskey(sol.matrixvars, (:F,0))
+                  z += sum(BigFloat.(sol.matrixvars[(:F,0)]))
+              end
+              for k in 0:28
+                  key=(:a,k)
+                  if haskey(sol.matrixvars,key)
+                      z += BigFloat(sol.matrixvars[key][1,1])
+                  end
+              end
+              return z
+          end
+          println("CHECKPOINT_DUAL_DIRECT_OBJECTIVE=", direct_obj(dualsol))
+          println("CHECKPOINT_PRIMAL_DIRECT_OBJECTIVE=", direct_obj(primalsol))
+
+          mkpath("results/matrices")
+          function export_sol(sol,label)
+              meta=open("results/$(label)_matrix_meta.tsv","w")
+              println(meta,"index\tkey\tn\tfrobenius\tmin_eig_float64\tmax_eig_float64\tfile")
+              for (idx,key) in enumerate(sort!(collect(keys(sol.matrixvars)),by=string))
+                  M=Matrix(sol.matrixvars[key])
+                  n=size(M,1)
+                  fn="results/matrices/$(label)_$(lpad(idx,3,'0')).tsv"
+                  open(fn,"w") do io
+                      println(io,"# key=",repr(key))
+                      for i in 1:n
+                          println(io,join([@sprintf("%.45e",BigFloat(M[i,j])) for j in 1:n],'\t'))
+                      end
+                  end
+                  Mf=Matrix{Float64}(M)
+                  vals=eigvals(Symmetric(Mf))
+                  fro=sqrt(sum(abs2,BigFloat.(M)))
+                  println(meta,join((idx,repr(key),n,string(fro),minimum(vals),maximum(vals),fn),'\t'))
+              end
+              close(meta)
+          end
+          export_sol(dualsol,"dual")
+          export_sol(primalsol,"primal")
+          println("EXPORT_PASS")
+          JULIA
+          echo ${PIPESTATUS[0]} > results/export_exit_status.txt
+          sha256sum results/* results/matrices/* > results/SHA256SUMS.txt 2>/dev/null || true
+          exit 0
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kissing5-clrs-degree14-checkpoint
+          path: results/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 6
