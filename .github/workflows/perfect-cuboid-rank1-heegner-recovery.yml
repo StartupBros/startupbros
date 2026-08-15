@@ -1,0 +1,154 @@
+name: perfect-cuboid-rank1-heegner-recovery
+on:
+  push:
+    branches: [math/perfect-cuboid-rank1-heegner-recovery]
+permissions:
+  contents: read
+jobs:
+  recover-and-sieve:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        delta: [6, 14, 30, 46, 70, 805]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install exact tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pari-gp pari-elldata pari-seadata
+      - name: Recover exact Heegner point and saturate
+        env:
+          DELTA: ${{ matrix.delta }}
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          cat > /tmp/heegner.gp <<'GP'
+          default(realprecision,100);
+          default(parisizemax,8000000000);
+          d=eval(getenv("DELTA"));
+          A=1194439680000/d;
+          B=239738147958629376000000/d^2;
+          C=286352756731497925108039680000000000/d^3;
+          E=ellinit([0,A,0,B,C]);
+          print("DELTA=",d);
+          print("MODEL=",[0,A,0,B,C]);
+          print("ROOTNO=",ellrootno(E));
+          print("ANALYTIC=",ellanalyticrank(E));
+          H=ellheegner(E);
+          if(!ellisoncurve(E,H),error("heegner point off curve"));
+          print("HEEGNER=",H);
+          S=ellsaturation(E,[H],500);
+          if(#S!=1,error("unexpected saturation output"));
+          P=S[1];
+          if(!ellisoncurve(E,P),error("saturated point off curve"));
+          print("SAT_POINT=",P);
+          print("PX_NUM=",numerator(P[1]));
+          print("PX_DEN=",denominator(P[1]));
+          print("PY_NUM=",numerator(P[2]));
+          print("PY_DEN=",denominator(P[2]));
+          print("RANK_WITH_P=",ellrank(E,0,[P]));
+          print("TORSION=",elltors(E));
+          print("SAT500=",ellsaturation(E,[P],500));
+          quit;
+          GP
+          GP_COLORS='' gp -q /tmp/heegner.gp > results/pari.raw 2>&1
+          sed -r 's/\x1B\[[0-9;]*[mK]//g' results/pari.raw > results/pari.txt
+          cat results/pari.txt
+          ! grep -Eq '\*\*\*|syntax error|incorrect type|at top-level|stack overflows' results/pari.txt
+          grep -q '^ROOTNO=-1$' results/pari.txt
+          grep -q '^RANK_WITH_P=\[1, 1,' results/pari.txt
+          grep -q '^TORSION=\[2, \[2\],' results/pari.txt
+          test "$(grep -c '^PX_NUM=\|^PX_DEN=\|^PY_NUM=\|^PY_DEN=' results/pari.txt)" -eq 4
+      - name: Projectively complete increasing-prime sieve
+        env:
+          DELTA: ${{ matrix.delta }}
+        run: |
+          set -euo pipefail
+          cat > /tmp/sieve.py <<'PY'
+          from fractions import Fraction
+          import json, os, re
+
+          d=int(os.environ['DELTA'])
+          text=open('results/pari.txt').read()
+          def grab(name):
+              m=re.search(r'^'+name+r'=(-?\d+)$',text,re.M)
+              assert m,name
+              return int(m.group(1))
+          P=(Fraction(grab('PX_NUM'),grab('PX_DEN')),Fraction(grab('PY_NUM'),grab('PY_DEN')))
+
+          A0=1194439680000; B0=239738147958629376000000
+          C0=286352756731497925108039680000000000
+          BM=548667061240312000; S0=328460543600; R0=518420
+          D=772800; AL=417605
+          a2=A0//d; a4=B0//(d*d); a6=C0//(d*d*d)
+          assert P[1]**2==P[0]**3+a2*P[0]**2+a4*P[0]+a6
+          bad={2,3,5,7,17,23,79,401}
+
+          def primes(n):
+              sieve=bytearray(b'\x01')*(n+1); sieve[:2]=b'\x00\x00'
+              for q in range(2,int(n**0.5)+1):
+                  if sieve[q]: sieve[q*q:n+1:q]=b'\x00'*(((n-q*q)//q)+1)
+              return [q for q in range(2,n+1) if sieve[q]]
+          def redfrac(q,p): return q.numerator%p*pow(q.denominator%p,-1,p)%p
+          def redpoint(P,p):
+              if P is None:return None
+              if P[0].denominator%p==0 or P[1].denominator%p==0:return None
+              return redfrac(P[0],p),redfrac(P[1],p)
+          def add(P,Q,p):
+              if P is None:return Q
+              if Q is None:return P
+              x1,y1=P;x2,y2=Q
+              if x1==x2 and (y1+y2)%p==0:return None
+              if P==Q:
+                  if y1==0:return None
+                  lam=(3*x1*x1+2*(a2%p)*x1+(a4%p))*pow(2*y1%p,-1,p)%p
+              else: lam=(y2-y1)*pow((x2-x1)%p,-1,p)%p
+              x3=(lam*lam-(a2%p)-x1-x2)%p
+              return x3,(lam*(x1-x3)-y1)%p
+          def subgroup(Pp,Tp,p):
+              cyc=[];seen=set();Q=None
+              while Q not in seen:
+                  seen.add(Q);cyc.append(Q);Q=add(Q,Pp,p)
+              return set(cyc)|{add(Q,Tp,p) for Q in cyc},len(cyc)
+          def imageG(p):
+              invd=pow(d%p,-1,p); k=D*invd%p; root=R0*invd%p
+              shift=S0*invd%p; dm=BM*pow((d*d)%p,-1,p)%p
+              sq={}
+              for y in range(p):sq.setdefault(y*y%p,[]).append(y)
+              I=set();aff=0
+              for mu in range(p):
+                  m2=mu*mu%p;m4=m2*m2%p
+                  rhs=(m4+k*k)%p*(d*(m4+k*k)+4*AL*m2)%p
+                  for v in sq.get(rhs,[]):
+                      aff+=1;u=(m2+root)%p
+                      if u==0:I.add(None)
+                      else:I.add(((dm*pow(u,-1,p)-shift)%p,dm*v*pow(u*u%p,-1,p)%p))
+              inf=[]
+              for sd in sq.get(d%p,[]):
+                  Q=((-shift)%p,dm*sd%p);inf.append(Q);I.add(Q)
+              return I,aff,inf
+
+          T= (Fraction(-a2),Fraction(0))
+          obstruction=None; records=[]
+          for p in primes(20000):
+              if p in bad: continue
+              Pp=redpoint(P,p); Tp=redpoint(T,p)
+              H,ordP=subgroup(Pp,Tp,p)
+              I,aff,inf=imageG(p)
+              inter=H&I
+              if len(records)<20 or not inter:
+                  records.append({'p':p,'P_reduction':Pp,'P_order':ordP,'MW_size':len(H),'G_affine':aff,'G_infinity':inf,'G_image_size':len(I),'intersection_size':len(inter)})
+              if not inter:
+                  obstruction=records[-1];break
+          result={'delta':d,'generator':[str(P[0]),str(P[1])],'obstruction':obstruction,'records':records}
+          open('results/sieve.json','w').write(json.dumps(result,indent=2,sort_keys=True))
+          print(json.dumps(result,indent=2,sort_keys=True))
+          PY
+          python3 /tmp/sieve.py | tee results/sieve.txt
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rank1-heegner-${{ matrix.delta }}
+          path: results/
+          if-no-files-found: error
