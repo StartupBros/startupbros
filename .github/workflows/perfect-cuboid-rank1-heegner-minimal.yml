@@ -1,0 +1,70 @@
+name: perfect-cuboid-rank1-heegner-minimal
+on:
+  push:
+    branches: [math/perfect-cuboid-rank1-heegner-recovery]
+permissions:
+  contents: read
+jobs:
+  recover:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        delta: [6, 14, 30, 46, 70, 805]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PARI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pari-gp pari-elldata pari-seadata
+      - name: Minimal-model Heegner recovery
+        env:
+          DELTA: ${{ matrix.delta }}
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          cat > /tmp/run.gp <<'GP'
+          default(realprecision,100);
+          default(parisizemax,8000000000);
+          d=eval(getenv("DELTA"));
+          A=1194439680000/d;
+          B=239738147958629376000000/d^2;
+          C=286352756731497925108039680000000000/d^3;
+          E0=ellinit([0,A,0,B,C]);
+          Em=ellminimalmodel(E0,&v);
+          print("DELTA=",d);
+          print("ORIGINAL=",E0[1..5]);
+          print("MINIMAL=",Em[1..5]);
+          print("CHANGE=",v);
+          print("ROOTNO=",ellrootno(Em));
+          Hm=ellheegner(Em);
+          if(!ellisoncurve(Em,Hm),error("minimal Heegner point off curve"));
+          H0=ellchangepointinv(Hm,v);
+          if(!ellisoncurve(E0,H0),error("pulled-back point off curve"));
+          S=ellsaturation(E0,[H0],500);
+          if(#S!=1,error("unexpected saturation output"));
+          P=S[1];
+          print("HEEGNER_MIN=",Hm);
+          print("PULLBACK=",H0);
+          print("SAT_POINT=",P);
+          print("PX_NUM=",numerator(P[1]));
+          print("PX_DEN=",denominator(P[1]));
+          print("PY_NUM=",numerator(P[2]));
+          print("PY_DEN=",denominator(P[2]));
+          print("RANK=",ellrank(E0,0,[P]));
+          print("TORSION=",elltors(E0));
+          quit;
+          GP
+          GP_COLORS='' gp -q /tmp/run.gp > results/raw.txt 2>&1
+          sed -r 's/\x1B\[[0-9;]*[mK]//g' results/raw.txt > results/output.txt
+          cat results/output.txt
+          ! grep -Eq '\*\*\*|syntax error|incorrect type|at top-level|stack overflows' results/output.txt
+          grep -q '^ROOTNO=-1$' results/output.txt
+          grep -q '^RANK=\[1, 1,' results/output.txt
+          grep -q '^TORSION=\[2, \[2\],' results/output.txt
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rank1-minimal-heegner-${{ matrix.delta }}
+          path: results/
+          if-no-files-found: error
