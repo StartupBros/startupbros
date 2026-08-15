@@ -1,0 +1,47 @@
+name: perfect-cuboid-delta1-pullback
+on:
+  push:
+    branches: [math/perfect-cuboid-delta1-pullback]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install exact tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pari-gp pari-elldata pari-seadata eclib-tools
+      - name: PARI exact descent and torsion
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          cat > /tmp/test.gp <<'GP'
+          default(realprecision,100);
+          default(parisizemax,4000000000);
+          F=ellinit([0,-9523240,0,2790302976400,0]);
+          print("F_RANK=",ellrank(F));
+          print("F_TORS=",elltors(F));
+          print("F_ROOTNO=",ellrootno(F));
+          print("F_ANALYTIC=",ellanalyticrank(F));
+          print("F_MIN=",ellglobalred(F));
+          print("F_RATPTS=",ellratpoints(F,10^8));
+          quit;
+          GP
+          GP_COLORS='' gp -q /tmp/test.gp > results/pari.raw 2>&1
+          sed -r 's/\x1B\[[0-9;]*[mK]//g' results/pari.raw > results/pari.txt
+          cat results/pari.txt
+          ! grep -Eq '\*\*\*|syntax error|incorrect type|at top-level|stack overflows' results/pari.txt
+      - name: Independent eclib full descent
+        run: |
+          set -euo pipefail
+          echo '[0,-9523240,0,2790302976400,0]' | mwrank -v 2 -p 100 > results/mwrank.txt 2>&1
+          cat results/mwrank.txt
+          ! grep -Eq 'syntax error|Segmentation|Aborted' results/mwrank.txt
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: delta1-pullback
+          path: results/
+          if-no-files-found: error
