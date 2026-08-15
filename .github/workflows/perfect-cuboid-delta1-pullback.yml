@@ -32,13 +32,16 @@ jobs:
           GP_COLORS='' gp -q /tmp/test.gp > results/pari.raw 2>&1
           sed -r 's/\x1B\[[0-9;]*[mK]//g' results/pari.raw > results/pari.txt
           cat results/pari.txt
-          ! grep -Eq '\*\*\*|syntax error|incorrect type|at top-level|stack overflows' results/pari.txt
+          ! grep -Eq 'syntax error|incorrect type|at top-level|stack overflows' results/pari.txt
+          grep -q '^F_RANK=\[2, 2,' results/pari.txt
+          grep -q '^F_TORS=\[2, \[2\],' results/pari.txt
       - name: Independent eclib full descent
         run: |
           set -euo pipefail
           echo '[0,-9523240,0,2790302976400,0]' | mwrank -v 2 -p 100 > results/mwrank.txt 2>&1
           cat results/mwrank.txt
           ! grep -Eq 'syntax error|Segmentation|Aborted' results/mwrank.txt
+          grep -q 'rank(E) = 2' results/mwrank.txt
           sha256sum results/* > results/SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
