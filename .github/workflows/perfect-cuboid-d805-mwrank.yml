@@ -1,0 +1,32 @@
+name: perfect-cuboid-d805-mwrank
+on:
+  push:
+    branches: [math/perfect-cuboid-rank1-heegner-recovery]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install eclib
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y eclib-tools
+      - name: Independent full Mordell-Weil calculation
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          printf '%s\n' '[0,1483776000,0,369952004874240000,548925905984280330240000000]' | mwrank -q -o > results/mwrank.raw 2>&1
+          sed -r 's/\x1B\[[0-9;]*[mK]//g' results/mwrank.raw > results/mwrank.txt
+          cat results/mwrank.txt
+          ! grep -Eqi 'error|failed|not determined|conditional' results/mwrank.txt
+          grep -q 'rank(E) = 1' results/mwrank.txt
+          grep -q 'full Mordell-Weil basis' results/mwrank.txt
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: d805-mwrank
+          path: results/
+          if-no-files-found: error
