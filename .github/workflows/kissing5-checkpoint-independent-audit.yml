@@ -1,0 +1,157 @@
+name: kissing5-checkpoint-independent-audit
+
+on:
+  push:
+    branches:
+      - kissing5-relay-20260814
+    paths:
+      - .github/workflows/kissing5-checkpoint-independent-audit.yml
+  workflow_dispatch:
+
+jobs:
+  audit-checkpoints:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.12.6'
+      - name: Clone and instantiate fixed solver commit
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/nanleij/ClusteredLowRankSolver.jl.git clrs
+          git -C clrs checkout 09ac81aed031bdea714832cf515244f6eb223531
+          julia --project=clrs -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+      - name: Download retained 192N artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: kissing5-degree14-192N
+          path: inputs/192N
+          repository: StartupBros/startupbros
+          run-id: 31872356942
+          github-token: ${{ github.token }}
+      - name: Download forced-exit adversary artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: kissing5-checkpoint-adversary-v2
+          path: inputs/adversary
+          repository: StartupBros/startupbros
+          run-id: 31872356942
+          github-token: ${{ github.token }}
+      - name: Independent deserialization, state, and corruption audit
+        run: |
+          set -euxo pipefail
+          mkdir -p results
+          cat > audit.jl <<'JULIA'
+          using Serialization, LinearAlgebra, SHA, Printf
+          using ClusteredLowRankSolver
+
+          function maxdev(sol, omega=BigFloat(1000))
+              z=BigFloat(0); entries=0
+              for M0 in values(sol.matrixvars)
+                  M=Matrix(M0)
+                  for i in axes(M,1), j in axes(M,2)
+                      target=(i==j ? omega : BigFloat(0))
+                      z=max(z,abs(BigFloat(M[i,j])-target)); entries+=1
+                  end
+              end
+              return z,entries
+          end
+          function direct_obj(sol)
+              z=BigFloat(1)
+              haskey(sol.matrixvars,(:F,0)) && (z += sum(BigFloat.(sol.matrixvars[(:F,0)])))
+              for k=0:28
+                  key=(:a,k)
+                  haskey(sol.matrixvars,key) && (z += BigFloat(sol.matrixvars[key][1,1]))
+              end
+              z
+          end
+          function max_matrix_diff(a,b)
+              @assert Set(keys(a.matrixvars)) == Set(keys(b.matrixvars))
+              z=BigFloat(0); entries=0
+              for key in keys(a.matrixvars)
+                  A=Matrix(a.matrixvars[key]); B=Matrix(b.matrixvars[key]); @assert size(A)==size(B)
+                  for i in eachindex(A)
+                      z=max(z,abs(BigFloat(A[i])-BigFloat(B[i]))); entries+=1
+                  end
+              end
+              return z,entries
+          end
+          function truncation_rejected(src,dst)
+              bytes=read(src); @assert length(bytes)>100
+              write(dst,bytes[1:div(length(bytes),2)])
+              try
+                  deserialize(dst)
+                  return false
+              catch
+                  return true
+              end
+          end
+
+          cp192="inputs/192N/checkpoint.jls"; ret192="inputs/192N/returned.jls"
+          @assert isfile(cp192) && isfile(ret192)
+          d192,p192=deserialize(cp192)
+          dr192,pr192=deserialize(ret192)
+          dd192,de192=maxdev(d192); pd192,pe192=maxdev(p192)
+          dmd,cmp_entries_d=max_matrix_diff(d192,dr192)
+          pmd,cmp_entries_p=max_matrix_diff(p192,pr192)
+          rows192=max(0,countlines("inputs/192N/iterates.tsv")-1)
+          @assert rows192==2
+          @assert dd192>0 && pd192>0
+          @assert dmd==0 && pmd==0
+          @assert length(d192.matrixvars)>0 && length(p192.matrixvars)>0
+          trunc192=truncation_rejected(cp192,"results/192N_truncated.jls")
+          @assert trunc192
+
+          cpa="inputs/adversary/checkpoint.jls"
+          da,pa=deserialize(cpa)
+          dda,dea=maxdev(da); pda,pea=maxdev(pa)
+          rowsa=max(0,countlines("inputs/adversary/iterates.tsv")-1)
+          exita=strip(read("inputs/adversary/solver_exit_status.txt",String))
+          @assert rowsa==1 && exita=="124"
+          @assert dda>0 && pda>0
+          trunca=truncation_rejected(cpa,"results/adversary_truncated.jls")
+          @assert trunca
+
+          open("results/audit.tsv","w") do io
+              println(io,"status\tPASS")
+              println(io,"solver_commit\t09ac81aed031bdea714832cf515244f6eb223531")
+              println(io,"192N_completed_rows\t",rows192)
+              println(io,"192N_dual_keys\t",length(d192.matrixvars))
+              println(io,"192N_primal_keys\t",length(p192.matrixvars))
+              println(io,"192N_dual_entries\t",de192)
+              println(io,"192N_primal_entries\t",pe192)
+              println(io,"192N_dual_maxdev_1000I\t",dd192)
+              println(io,"192N_primal_maxdev_1000I\t",pd192)
+              println(io,"192N_dual_direct_objective\t",direct_obj(d192))
+              println(io,"192N_primal_direct_objective\t",direct_obj(p192))
+              println(io,"192N_checkpoint_returned_dual_maxdiff\t",dmd)
+              println(io,"192N_checkpoint_returned_primal_maxdiff\t",pmd)
+              println(io,"192N_compared_dual_entries\t",cmp_entries_d)
+              println(io,"192N_compared_primal_entries\t",cmp_entries_p)
+              println(io,"192N_checkpoint_sha256\t",bytes2hex(sha256(read(cp192))))
+              println(io,"192N_returned_sha256\t",bytes2hex(sha256(read(ret192))))
+              println(io,"192N_truncated_rejected\t",trunc192)
+              println(io,"adversary_completed_rows\t",rowsa)
+              println(io,"adversary_forced_exit_status\t",exita)
+              println(io,"adversary_dual_keys\t",length(da.matrixvars))
+              println(io,"adversary_primal_keys\t",length(pa.matrixvars))
+              println(io,"adversary_dual_entries\t",dea)
+              println(io,"adversary_primal_entries\t",pea)
+              println(io,"adversary_dual_maxdev_1000I\t",dda)
+              println(io,"adversary_primal_maxdev_1000I\t",pda)
+              println(io,"adversary_checkpoint_sha256\t",bytes2hex(sha256(read(cpa))))
+              println(io,"adversary_truncated_rejected\t",trunca)
+          end
+          println(read("results/audit.tsv",String))
+          JULIA
+          julia --project=clrs audit.jl | tee results/audit.log
+          grep -q $'status\tPASS' results/audit.tsv
+          sha256sum results/audit.tsv results/audit.log > results/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kissing5-checkpoint-independent-audit
+          path: results/
+          if-no-files-found: error
+          retention-days: 30
