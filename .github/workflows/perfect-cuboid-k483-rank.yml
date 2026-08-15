@@ -1,0 +1,54 @@
+name: perfect-cuboid-k483-rank
+on:
+  push:
+    branches: [math/perfect-cuboid-k483-elliptic-chabauty]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install exact tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pari-gp pari-elldata pari-seadata eclib-tools
+      - name: PARI exact rank and torsion certificates
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          cat > /tmp/k483.gp <<'GP'
+          default(realprecision,100);
+          default(parisizemax,4000000000);
+          E=ellinit([0,-1420780,0,771687168000,-1096397694551040000]);
+          T=ellinit(elltwist(E,483));
+          print("BASE_MODEL=",E[1..5]);
+          print("BASE_RANK=",ellrank(E));
+          print("BASE_TORS=",elltors(E));
+          print("TWIST_MODEL=",T[1..5]);
+          print("TWIST_RANK=",ellrank(T));
+          print("TWIST_TORS=",elltors(T));
+          print("TWIST_ROOTNO=",ellrootno(T));
+          print("TWIST_ANALYTIC=",ellanalyticrank(T));
+          print("TWIST_GLOBALRED=",ellglobalred(T));
+          print("TWIST_RATPTS=",ellratpoints(T,10^8));
+          quit;
+          GP
+          GP_COLORS='' gp -q /tmp/k483.gp > results/pari.raw 2>&1
+          sed -r 's/\x1B\[[0-9;]*[mK]//g' results/pari.raw > results/pari.txt
+          cat results/pari.txt
+          ! grep -Eq 'syntax error|incorrect type|at top-level|stack overflows|  \*\*\*   at top-level' results/pari.txt
+          grep -q '^BASE_RANK=\[1, 1,' results/pari.txt
+          grep -q '^TWIST_RANK=' results/pari.txt
+      - name: Independent eclib descent on the 483 twist
+        run: |
+          set -euo pipefail
+          echo '[0,-686236740,0,180026127735552000,-123540543012068786580480000]' | mwrank -v 2 -p 100 > results/mwrank.txt 2>&1
+          cat results/mwrank.txt
+          ! grep -Eq 'syntax error|Segmentation|Aborted' results/mwrank.txt
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: k483-rank
+          path: results/
+          if-no-files-found: error
