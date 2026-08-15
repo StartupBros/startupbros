@@ -1,0 +1,265 @@
+name: kissing5-first-step-factorial
+
+on:
+  push:
+    branches:
+      - kissing5-relay-20260814
+    paths:
+      - .github/workflows/kissing5-first-step-factorial.yml
+  workflow_dispatch:
+
+jobs:
+  degree14-first-step:
+    name: degree14-${{ matrix.case }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - case: 128N
+            prec: 128
+            preprocess: false
+          - case: 128P
+            prec: 128
+            preprocess: true
+          - case: 192N
+            prec: 192
+            preprocess: false
+          - case: 192P
+            prec: 192
+            preprocess: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.12.6'
+
+      - name: Clone and instantiate fixed solver commit
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/nanleij/ClusteredLowRankSolver.jl.git clrs
+          git -C clrs checkout 09ac81aed031bdea714832cf515244f6eb223531
+          julia --project=clrs -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+
+      - name: Run exactly two completed iterations with per-iteration saves
+        env:
+          CASE: ${{ matrix.case }}
+          PREC: ${{ matrix.prec }}
+          PREPROCESS: ${{ matrix.preprocess }}
+        run: |
+          set +e
+          mkdir -p "results/${CASE}"
+          timeout 65m julia --project=clrs <<'JULIA' 2>&1 | tee "results/${CASE}/solve.log"
+          using Serialization
+          include("clrs/examples/ThreePointBound.jl")
+          using .ThreePointBound, ClusteredLowRankSolver
+
+          case = ENV["CASE"]
+          prec = parse(Int, ENV["PREC"])
+          preprocess = lowercase(ENV["PREPROCESS"]) == "true"
+          root = "results/$(case)"
+          ledger = "$(root)/iterates.tsv"
+          open(ledger, "w") do io
+              println(io, "iter\ttime\tmu\td_obj\tp_obj\tdual_gap\tD_error\td_error\tp_error\talpha_d\talpha_p")
+          end
+          cb = function(m)
+              open(ledger, "a") do io
+                  vals=(m.iter,m.time,m.mu,m.d_obj,m.p_obj,m.dual_gap,m.D_error,m.d_error,m.p_error,m.alpha_d,m.alpha_p)
+                  println(io, join(string.(vals), '\t'))
+              end
+          end
+          ss=SaveSettings(iter_interval=1, only_last=true, save_name="$(root)/checkpoint")
+          problem,dualsol,primalsol=three_point_spherical_codes(
+              5,1//2,14,14;
+              prec=prec,
+              matmul_prec=prec,
+              preprocess=preprocess,
+              maxiterations=2,
+              duality_gap_threshold=big"1e-80",
+              dual_error_threshold=big"1e-80",
+              primal_error_threshold=big"1e-80",
+              omega_d=10^3,
+              omega_p=10^3,
+              step_length_threshold=big"1e-30",
+              save_settings=ss,
+              iteration_callback=cb)
+          serialize("$(root)/returned.jls",(dualsol,primalsol))
+          println("RETURNED_PRIMAL_OBJECTIVE=",objvalue(problem,primalsol))
+          println("RETURNED_DUAL_OBJECTIVE=",dualobjvalue(problem,dualsol))
+          JULIA
+          status=${PIPESTATUS[0]}
+          echo "$status" > "results/${CASE}/solver_exit_status.txt"
+          exit 0
+
+      - name: Fail closed and fingerprint retained state
+        env:
+          CASE: ${{ matrix.case }}
+          PREC: ${{ matrix.prec }}
+          PREPROCESS: ${{ matrix.preprocess }}
+        run: |
+          set -euxo pipefail
+          test -s "results/${CASE}/checkpoint.jls"
+          julia --project=clrs <<'JULIA' 2>&1 | tee "results/$(ENV["CASE"])/validation.log"
+          using Serialization, SHA
+          case=ENV["CASE"]
+          root="results/$(case)"
+          dualsol,primalsol=deserialize("$(root)/checkpoint.jls")
+          function maxdev(sol)
+              z=big"0"
+              entries=0
+              for M0 in values(sol.matrixvars)
+                  M=Matrix(M0)
+                  for i in axes(M,1),j in axes(M,2)
+                      target=(i==j ? big"1000" : big"0")
+                      z=max(z,abs(BigFloat(M[i,j])-target))
+                      entries+=1
+                  end
+              end
+              z,entries
+          end
+          function direct_obj(sol)
+              z=BigFloat(1)
+              if haskey(sol.matrixvars,(:F,0))
+                  z+=sum(BigFloat.(sol.matrixvars[(:F,0)]))
+              end
+              for k=0:28
+                  key=(:a,k)
+                  haskey(sol.matrixvars,key) && (z+=BigFloat(sol.matrixvars[key][1,1]))
+              end
+              z
+          end
+          dd,de=maxdev(dualsol)
+          pd,pe=maxdev(primalsol)
+          rows=max(0,countlines("$(root)/iterates.tsv")-1)
+          @assert rows>=2
+          @assert length(dualsol.matrixvars)>0 && length(primalsol.matrixvars)>0
+          @assert dd>0 && pd>0
+          open("$(root)/summary.tsv","w") do io
+              println(io,"status\tPASS")
+              println(io,"case\t",case)
+              println(io,"precision\t",ENV["PREC"])
+              println(io,"preprocess\t",ENV["PREPROCESS"])
+              println(io,"completed_iteration_rows\t",rows)
+              println(io,"dual_matrix_keys\t",length(dualsol.matrixvars))
+              println(io,"primal_matrix_keys\t",length(primalsol.matrixvars))
+              println(io,"dual_entries\t",de)
+              println(io,"primal_entries\t",pe)
+              println(io,"dual_max_deviation_from_1000I\t",dd)
+              println(io,"primal_max_deviation_from_1000I\t",pd)
+              println(io,"dual_direct_objective\t",direct_obj(dualsol))
+              println(io,"primal_direct_objective\t",direct_obj(primalsol))
+              println(io,"checkpoint_sha256\t",bytes2hex(sha256(read("$(root)/checkpoint.jls"))))
+          end
+          println(read("$(root)/summary.tsv",String))
+          JULIA
+          sha256sum "results/${CASE}"/* > "results/${CASE}/SHA256SUMS.txt"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kissing5-degree14-${{ matrix.case }}
+          path: results/${{ matrix.case }}/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 6
+
+  checkpoint-adversary:
+    name: forced-exit-after-first-save
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.12.6'
+
+      - name: Clone and instantiate fixed solver commit
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/nanleij/ClusteredLowRankSolver.jl.git clrs
+          git -C clrs checkout 09ac81aed031bdea714832cf515244f6eb223531
+          julia --project=clrs -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+
+      - name: Terminate immediately after the first saved iterate
+        run: |
+          set +e
+          mkdir -p results/adversary
+          julia --project=clrs <<'JULIA' 2>&1 | tee results/adversary/solve.log
+          include("clrs/examples/ThreePointBound.jl")
+          using .ThreePointBound, ClusteredLowRankSolver
+          ledger="results/adversary/iterates.tsv"
+          open(ledger,"w") do io
+              println(io,"iter\ttime\tmu\td_obj\tp_obj\tdual_gap")
+          end
+          cb=function(m)
+              open(ledger,"a") do io
+                  println(io,join((m.iter,m.time,m.mu,m.d_obj,m.p_obj,m.dual_gap),'\t'))
+              end
+              flush(stdout)
+              Base.exit(124)
+          end
+          ss=SaveSettings(iter_interval=1,only_last=true,save_name="results/adversary/checkpoint")
+          three_point_spherical_codes(
+              5,1//2,10,10;
+              prec=96,
+              matmul_prec=96,
+              preprocess=false,
+              maxiterations=100,
+              duality_gap_threshold=big"1e-80",
+              dual_error_threshold=big"1e-80",
+              primal_error_threshold=big"1e-80",
+              omega_d=10^3,
+              omega_p=10^3,
+              step_length_threshold=big"1e-30",
+              save_settings=ss,
+              iteration_callback=cb)
+          JULIA
+          status=${PIPESTATUS[0]}
+          echo "$status" > results/adversary/solver_exit_status.txt
+          exit 0
+
+      - name: Verify checkpoint survived forced process exit
+        run: |
+          set -euxo pipefail
+          test "$(cat results/adversary/solver_exit_status.txt)" = "124"
+          test -s results/adversary/checkpoint.jls
+          julia --project=clrs <<'JULIA' 2>&1 | tee results/adversary/validation.log
+          using Serialization,SHA
+          dualsol,primalsol=deserialize("results/adversary/checkpoint.jls")
+          function maxdev(sol)
+              z=big"0"
+              for M0 in values(sol.matrixvars)
+                  M=Matrix(M0)
+                  for i in axes(M,1),j in axes(M,2)
+                      z=max(z,abs(BigFloat(M[i,j])-(i==j ? big"1000" : big"0")))
+                  end
+              end
+              z
+          end
+          dd=maxdev(dualsol); pd=maxdev(primalsol)
+          rows=max(0,countlines("results/adversary/iterates.tsv")-1)
+          @assert rows==1
+          @assert dd>0 && pd>0
+          open("results/adversary/summary.tsv","w") do io
+              println(io,"status\tPASS")
+              println(io,"forced_exit_status\t124")
+              println(io,"completed_iteration_rows\t",rows)
+              println(io,"dual_matrix_keys\t",length(dualsol.matrixvars))
+              println(io,"primal_matrix_keys\t",length(primalsol.matrixvars))
+              println(io,"dual_max_deviation_from_1000I\t",dd)
+              println(io,"primal_max_deviation_from_1000I\t",pd)
+              println(io,"checkpoint_sha256\t",bytes2hex(sha256(read("results/adversary/checkpoint.jls"))))
+          end
+          println(read("results/adversary/summary.tsv",String))
+          JULIA
+          sha256sum results/adversary/* > results/adversary/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kissing5-checkpoint-adversary-v2
+          path: results/adversary/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 6
