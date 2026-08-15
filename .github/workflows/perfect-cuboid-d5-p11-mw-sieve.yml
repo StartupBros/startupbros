@@ -1,0 +1,119 @@
+name: perfect-cuboid-d5-p11-mw-sieve
+on:
+  push:
+    branches: [math/perfect-cuboid-d5-p11-mw-sieve]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install exact tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pari-gp pari-elldata pari-seadata
+      - name: Exact PARI Mordell-Weil certificate
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          cat > /tmp/run.gp <<'GP'
+          default(realprecision,100);
+          default(parisizemax,2000000000);
+          A2=238887936000;
+          A4=9589525918345175040000;
+          A6=2290822053851983400864317440000000;
+          E=ellinit([0,A2,0,A4,A6]);
+          P=[1579151339150400/961,-67279002820655820480000/29791];
+          T=[-238887936000,0];
+          if(!ellisoncurve(E,P),error("P off curve"));
+          if(!ellisoncurve(E,T),error("T off curve"));
+          print("RANK_WITH_P=",ellrank(E,0,[P]));
+          print("TORSION=",elltors(E));
+          print("SATURATED_100=",ellsaturation(E,[P],100));
+          p=11;
+          Ep=ellinit([0,Mod(A2,p),0,Mod(A4,p),Mod(A6,p)]);
+          Pp=[Mod(1579151339150400,p)/Mod(961,p),Mod(-67279002820655820480000,p)/Mod(29791,p)];
+          Tp=[Mod(-238887936000,p),Mod(0,p)];
+          print("PRED=",Pp);
+          print("TRED=",Tp);
+          print("P_EQUALS_T=",Pp==Tp);
+          print("ORDER_PRED=",ellorder(Ep,Pp));
+          print("ORDER_TRED=",ellorder(Ep,Tp));
+          print("LEGENDRE_BRANCH_A=",kronecker(-103684,p));
+          print("LEGENDRE_BRANCH_B=",kronecker(-230400,p));
+          quit;
+          GP
+          GP_COLORS='' gp -q /tmp/run.gp > results/pari.raw 2>&1
+          sed -r 's/\x1B\[[0-9;]*[mK]//g' results/pari.raw > results/pari.txt
+          cat results/pari.txt
+          ! grep -Eq '\*\*\*|syntax error|incorrect type|at top-level|stack overflows' results/pari.txt
+          grep -q '^RANK_WITH_P=\[1, 1,' results/pari.txt
+          grep -q '^TORSION=\[2, \[2\],' results/pari.txt
+          grep -q '^P_EQUALS_T=1$' results/pari.txt
+          grep -q '^ORDER_PRED=2$' results/pari.txt
+          grep -q '^LEGENDRE_BRANCH_A=-1$' results/pari.txt
+          grep -q '^LEGENDRE_BRANCH_B=-1$' results/pari.txt
+      - name: Independent exact map and finite-field audit
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > results/python.txt
+          from fractions import Fraction
+          from math import isqrt
+          A2=238887936000
+          A4=9589525918345175040000
+          A6=2290822053851983400864317440000000
+          k=154560
+          alpha=417605
+          d=21946682449612480
+          shift=65692108720
+          root=103684
+          P=(Fraction(1579151339150400,961),Fraction(-67279002820655820480000,29791))
+          T=(Fraction(-238887936000),Fraction(0))
+          assert P[1]**2==P[0]**3+A2*P[0]**2+A4*P[0]+A6
+          assert T[1]**2==T[0]**3+A2*T[0]**2+A4*T[0]+A6
+          # Quartic-to-cubic identity after u=z+103684, X=d/u, x=X-shift, y=d*v/u^2.
+          # Check coefficient conversion exactly.
+          a,b,c,dd=5,-403260,41811609840,d
+          assert 3*shift+c==A2
+          assert 3*shift*shift+2*c*shift+b*dd==A4
+          assert shift**3+c*shift**2+b*dd*shift+a*dd*dd==A6
+          p=11
+          def inv(x): return pow(x%p,-1,p)
+          def red(q): return q.numerator%p*inv(q.denominator)%p
+          Pp=(red(P[0]),red(P[1])); Tp=(red(T[0]),0)
+          assert Pp==Tp==(1,0)
+          def leg(a):
+              a%=p
+              return 0 if a==0 else (1 if pow(a,(p-1)//2,p)==1 else -1)
+          assert leg(-103684)==-1 and leg(-230400)==-1
+          # Enumerate all local points on G_5/F_11; the curve is locally nonempty.
+          affine=[]
+          for lam in range(p):
+              rhs=((lam**4+k*k)*(5*(lam**4+k*k)+4*alpha*lam*lam))%p
+              ys=[v for v in range(p) if v*v%p==rhs]
+              affine.extend((lam,v) for v in ys)
+          assert len(affine)==10
+          assert leg(5)==1  # two projective points at infinity
+          # Map every affine local lift to E(F_11); none lies in the global MW image {O,(1,0)}.
+          images=set()
+          for lam,v in affine:
+              z=lam*lam%p
+              u=(z+root)%p
+              assert u
+              x=(d*inv(u)-shift)%p
+              y=(d*v*inv(u*u))%p
+              assert y*y%p==(x**3+A2*x*x+A4*x+A6)%p
+              images.add((x,y))
+          assert (1,0) not in images
+          print('PASS rank=1 torsion=2 MW_image_mod11={O,(1,0)}')
+          print('branch_residues',(-103684)%p,(-230400)%p,'both_nonsquare')
+          print('local_G5_points',len(affine)+2,'mapped_affine_images',sorted(images))
+          PY
+          cat results/python.txt
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: d5-p11-mw-sieve
+          path: results/
+          if-no-files-found: error
