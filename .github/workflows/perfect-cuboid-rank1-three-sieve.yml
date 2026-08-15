@@ -1,0 +1,251 @@
+name: perfect-cuboid-rank1-three-sieve
+on:
+  push:
+    branches: [math/perfect-cuboid-rank1-three-sieve]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install exact tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pari-gp pari-elldata pari-seadata
+      - name: PARI exact rank and saturation checks
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          cat > /tmp/ranks.gp <<'GP'
+          default(realprecision,100);
+          default(parisizemax,4000000000);
+
+          E=ellinit([0,56878080000,0,543623918273536000000,30920284713475642490880000000000]);
+          P=[-16010184974368139760920000/2385951938286849,633336090237001674628066043534168000000/116544702269610651631743];
+          print("D21_RANK=",ellrank(E,0,[P]));
+          print("D21_TORS=",elltors(E));
+          print("D21_SAT100=",ellsaturation(E,[P],100));
+
+          E=ellinit([0,17310720000,0,50354578441216000000,871674008113926635520000000000]);
+          P=[-3991272005600097129783320000/748752499009009881,629386852906773591696542428768782296000000/647899175580888934808311779];
+          print("D69_RANK=",ellrank(E,0,[P]));
+          print("D69_TORS=",elltors(E));
+          print("D69_SAT100=",ellsaturation(E,[P],100));
+
+          E=ellinit([0,5193216000,0,4531912059709440000,23535198219076019159040000000]);
+          P=[36229200350600645245170526746752409600/1300383078273981786647956969,238214434186066586432503063289592290083070069515207680000/46892886232628756649763956826299373160203];
+          print("D230_RANK=",ellrank(E,0,[P]));
+          print("D230_TORS=",elltors(E));
+          print("D230_SAT100=",ellsaturation(E,[P],100));
+          quit;
+          GP
+          GP_COLORS='' gp -q /tmp/ranks.gp > results/pari.raw 2>&1
+          sed -r 's/\x1B\[[0-9;]*[mK]//g' results/pari.raw > results/pari.txt
+          cat results/pari.txt
+          ! grep -Eq '\*\*\*|syntax error|incorrect type|at top-level|stack overflows' results/pari.txt
+          grep -q '^D21_RANK=\[1, 1,' results/pari.txt
+          grep -q '^D69_RANK=\[1, 1,' results/pari.txt
+          grep -q '^D230_RANK=\[1, 1,' results/pari.txt
+          test "$(grep -c '_TORS=\[2, \[2\],' results/pari.txt)" -eq 3
+      - name: Exact Python projective Mordell-Weil sieve
+        run: |
+          set -euo pipefail
+          cat > /tmp/verify.py <<'PY'
+          from fractions import Fraction
+          import json
+
+          A=1194439680000
+          B=239738147958629376000000
+          C=286352756731497925108039680000000000
+          BMAP=548667061240312000
+          S0=328460543600
+          R0=518420
+          D=772800
+          ALPHA=417605
+          BAD={2,3,5,7,17,23,79,401}
+
+          DATA={
+            21:{
+              "p":29,
+              "P":(Fraction(-16010184974368139760920000,2385951938286849),
+                    Fraction(633336090237001674628066043534168000000,116544702269610651631743)),
+            },
+            69:{
+              "p":11,
+              "P":(Fraction(-3991272005600097129783320000,748752499009009881),
+                    Fraction(629386852906773591696542428768782296000000,647899175580888934808311779)),
+            },
+            230:{
+              "p":877,
+              "P":(Fraction(36229200350600645245170526746752409600,1300383078273981786647956969),
+                    Fraction(238214434186066586432503063289592290083070069515207680000,46892886232628756649763956826299373160203)),
+            },
+          }
+
+          def modq(q,p):
+              return q.numerator%p*pow(q.denominator%p,-1,p)%p
+
+          def add(P,Q,p,a2,a4):
+              if P is None:return Q
+              if Q is None:return P
+              x1,y1=P;x2,y2=Q
+              if x1==x2 and (y1+y2)%p==0:return None
+              if P==Q:
+                  if y1==0:return None
+                  lam=(3*x1*x1+2*a2*x1+a4)*pow(2*y1%p,-1,p)%p
+              else:
+                  lam=(y2-y1)*pow((x2-x1)%p,-1,p)%p
+              x3=(lam*lam-a2-x1-x2)%p
+              return x3,(lam*(x1-x3)-y1)%p
+
+          def subgroup(P,T,p,a2,a4):
+              cyc=[];seen=set();Q=None
+              while Q not in seen:
+                  seen.add(Q);cyc.append(Q);Q=add(Q,P,p,a2,a4)
+              H=set(cyc)|{add(Q,T,p,a2,a4) for Q in cyc}
+              return H,len(cyc)
+
+          def image_G(delta,p):
+              invd=pow(delta%p,-1,p)
+              k=D*invd%p
+              root=R0*invd%p
+              shift=S0*invd%p
+              dmap=BMAP*pow((delta*delta)%p,-1,p)%p
+              image=set();affine_count=0
+              square_table={}
+              for y in range(p):
+                  square_table.setdefault(y*y%p,[]).append(y)
+              for mu in range(p):
+                  m2=mu*mu%p;m4=m2*m2%p
+                  rhs=(m4+k*k)%p
+                  rhs=rhs*(delta*(m4+k*k)+4*ALPHA*m2)%p
+                  for v in square_table.get(rhs,[]):
+                      affine_count+=1
+                      z=m2
+                      u=(z+root)%p
+                      if u==0:
+                          image.add(None)
+                      else:
+                          x=(dmap*pow(u,-1,p)-shift)%p
+                          y=dmap*v*pow(u*u%p,-1,p)%p
+                          image.add((x,y))
+              infinities=[]
+              for sd in square_table.get(delta%p,[]):
+                  Q=((-shift)%p,dmap*sd%p)
+                  infinities.append(Q);image.add(Q)
+              return image,affine_count,infinities
+
+          def primes_upto(n):
+              out=[]
+              for q in range(2,n+1):
+                  if all(q%r for r in range(2,int(q**0.5)+1)):out.append(q)
+              return out
+
+          result={}
+          for delta,rec in DATA.items():
+              p=rec["p"];P=rec["P"]
+              a2=A//delta;a4=B//(delta*delta);a6=C//(delta**3)
+              assert P[1]**2==P[0]**3+a2*P[0]**2+a4*P[0]+a6
+              Pp=(modq(P[0],p),modq(P[1],p))
+              T=(-a2%p,0)
+              H,ordP=subgroup(Pp,T,p,a2%p,a4%p)
+              image,affine_count,infinities=image_G(delta,p)
+              assert not (H&image)
+
+              den_primes=set()
+              for q in (P[0].denominator,P[1].denominator):
+                  t=q;r=2
+                  while r*r<=t:
+                      if t%r==0:
+                          den_primes.add(r)
+                          while t%r==0:t//=r
+                      r+=1
+                  if t>1:den_primes.add(t)
+              first=None
+              for ell in primes_upto(p):
+                  if ell in BAD or delta%ell==0 or ell in den_primes:continue
+                  P0=(modq(P[0],ell),modq(P[1],ell))
+                  T0=(-a2%ell,0)
+                  H0,_=subgroup(P0,T0,ell,a2%ell,a4%ell)
+                  I0,_,_=image_G(delta,ell)
+                  if not(H0&I0):
+                      first=ell;break
+              assert first==p
+
+              result[str(delta)]={
+                "prime":p,
+                "P_reduction":Pp,
+                "T_reduction":T,
+                "P_order":ordP,
+                "MW_image":[list(q) if q is not None else None for q in sorted(H,key=str)],
+                "G_affine_points":affine_count,
+                "G_infinity_points":[list(q) for q in infinities],
+                "G_image_size":len(image),
+                "intersection_size":0,
+                "minimal_obstruction_prime":first,
+              }
+          open("results/certificate.json","w").write(json.dumps(result,indent=2,sort_keys=True))
+          print(json.dumps(result,indent=2,sort_keys=True))
+          PY
+          python3 /tmp/verify.py | tee results/python.txt
+      - name: Independent Node BigInt audit
+        run: |
+          set -euo pipefail
+          cat > /tmp/verify.js <<'JS'
+          const A=1194439680000n,B=239738147958629376000000n,C=286352756731497925108039680000000000n;
+          const BMAP=548667061240312000n,S0=328460543600n,R0=518420n,D=772800n,ALPHA=417605n;
+          const data=[
+            [21n,29n,[-16010184974368139760920000n,2385951938286849n],[633336090237001674628066043534168000000n,116544702269610651631743n]],
+            [69n,11n,[-3991272005600097129783320000n,748752499009009881n],[629386852906773591696542428768782296000000n,647899175580888934808311779n]],
+            [230n,877n,[36229200350600645245170526746752409600n,1300383078273981786647956969n],[238214434186066586432503063289592290083070069515207680000n,46892886232628756649763956826299373160203n]]
+          ];
+          const mod=(a,p)=>((a%p)+p)%p;
+          function egcd(a,b){if(b===0n)return[a,1n,0n];let[g,x,y]=egcd(b,a%b);return[g,y,x-(a/b)*y]}
+          const inv=(a,p)=>{let[g,x]=egcd(mod(a,p),p);if(g!==1n)throw Error("nonunit");return mod(x,p)};
+          const qmod=(q,p)=>mod(q[0],p)*inv(q[1],p)%p;
+          function add(P,Q,p,a2,a4){
+            if(P===null)return Q;if(Q===null)return P;
+            let[x1,y1]=P,[x2,y2]=Q;
+            if(x1===x2 && mod(y1+y2,p)===0n)return null;
+            let lam;
+            if(x1===x2&&y1===y2){
+              if(y1===0n)return null;
+              lam=mod(3n*x1*x1+2n*a2*x1+a4,p)*inv(2n*y1,p)%p;
+            } else lam=mod(y2-y1,p)*inv(x2-x1,p)%p;
+            let x3=mod(lam*lam-a2-x1-x2,p);
+            return [x3,mod(lam*(x1-x3)-y1,p)];
+          }
+          const key=P=>P===null?"O":P[0]+","+P[1];
+          function subgroup(P,T,p,a2,a4){
+            let cyc=[],seen=new Set(),Q=null;
+            while(!seen.has(key(Q))){seen.add(key(Q));cyc.push(Q);Q=add(Q,P,p,a2,a4)}
+            let H=new Map();for(const R of cyc){H.set(key(R),R);let S=add(R,T,p,a2,a4);H.set(key(S),S)}
+            return [H,cyc.length];
+          }
+          function imageG(d,p){
+            let invd=inv(d,p),k=D*invd%p,root=R0*invd%p,shift=S0*invd%p,dmap=BMAP*inv(d*d,p)%p;
+            let squares=new Map();for(let y=0n;y<p;y++){let s=y*y%p;if(!squares.has(s.toString()))squares.set(s.toString(),[]);squares.get(s.toString()).push(y)}
+            let I=new Map(),aff=0;
+            for(let mu=0n;mu<p;mu++){let m2=mu*mu%p,m4=m2*m2%p;let rhs=(m4+k*k)%p;rhs=rhs*mod(d*(m4+k*k)+4n*ALPHA*m2,p)%p;
+              for(const v of (squares.get(rhs.toString())||[])){aff++;let u=mod(m2+root,p),Q;if(u===0n)Q=null;else{let x=mod(dmap*inv(u,p)-shift,p);let y=dmap*v%p*inv(u*u%p,p)%p;Q=[x,y]}I.set(key(Q),Q)}
+            }
+            let inf=[];for(const sd of (squares.get(mod(d,p).toString())||[])){let Q=[mod(-shift,p),dmap*sd%p];inf.push(Q);I.set(key(Q),Q)}
+            return [I,aff,inf];
+          }
+          for(const [d,p,xq,yq] of data){
+            let a2=A/d,a4=B/(d*d),a6=C/(d*d*d);
+            let x=qmod(xq,p),y=qmod(yq,p);
+            if(mod(y*y-(x*x*x+a2*x*x+a4*x+a6),p)!==0n)throw Error("off curve "+d);
+            let T=[mod(-a2,p),0n];let[H,ord]=subgroup([x,y],T,p,a2%p,a4%p);let[I,aff,inf]=imageG(d,p);
+            for(const k of H.keys())if(I.has(k))throw Error("intersection "+d+" "+k);
+            console.log(`PASS delta=${d} p=${p} H=${H.size} ordP=${ord} Gaff=${aff} Ginf=${inf.length} Gimage=${I.size}`);
+          }
+          JS
+          node /tmp/verify.js | tee results/node.txt
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rank1-three-sieve
+          path: results/
+          if-no-files-found: error
