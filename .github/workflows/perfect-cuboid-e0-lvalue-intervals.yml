@@ -1,0 +1,156 @@
+name: perfect-cuboid-e0-lvalue-intervals
+on:
+  push:
+    branches: [math/perfect-cuboid-e0-lvalue-intervals]
+permissions:
+  contents: read
+jobs:
+  interval:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - delta: 105
+            conductor: 18232911808
+            terms: 500000
+            model: '[0,11375616000,0,21744956730941440000,247362277707805139927040000000]'
+          - delta: 345
+            conductor: 1688870848
+            terms: 150000
+            model: '[0,3462144000,0,2014183137648640000,6973392064911413084160000000]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PARI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pari-gp pari-elldata pari-seadata
+      - name: Generate exact coefficient stream
+        env:
+          DELTA: ${{ matrix.delta }}
+          MODEL: ${{ matrix.model }}
+          TERMS: ${{ matrix.terms }}
+          CONDUCTOR: ${{ matrix.conductor }}
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          cat > /tmp/coeff.gp <<'GP'
+          default(parisizemax,8000000000);
+          E=ellinit(eval(getenv("MODEL")));
+          M=eval(getenv("TERMS"));
+          print("DELTA=",getenv("DELTA"));
+          print("GLOBALRED=",ellglobalred(E));
+          print("ROOTNO=",ellrootno(E));
+          a=ellan(E,M);
+          write("results/an.gpvec",a);
+          print("TERMS=",#a);
+          quit;
+          GP
+          GP_COLORS='' gp -q /tmp/coeff.gp > results/pari.raw 2>&1
+          sed -r 's/\x1B\[[0-9;]*[mK]//g' results/pari.raw > results/pari.txt
+          cat results/pari.txt
+          ! grep -Eq '\*\*\*|syntax error|incorrect type|at top-level|stack overflows' results/pari.txt
+          grep -q '^ROOTNO=1$' results/pari.txt
+          grep -q "^TERMS=${TERMS}$" results/pari.txt
+      - name: Directed rigorous interval
+        env:
+          DELTA: ${{ matrix.delta }}
+          TERMS: ${{ matrix.terms }}
+          CONDUCTOR: ${{ matrix.conductor }}
+        run: |
+          set -euo pipefail
+          cat > /tmp/interval.py <<'PY'
+          import ast, math, os
+          from decimal import Decimal, Context, localcontext, ROUND_FLOOR, ROUND_CEILING
+          from fractions import Fraction
+          d=int(os.environ['DELTA']); M=int(os.environ['TERMS']); N=int(os.environ['CONDUCTOR'])
+          coeffs=ast.literal_eval(open('results/an.gpvec').read().strip())
+          assert len(coeffs)==M and coeffs[0]==1
+          # Certified decimal enclosure for pi: last displayed digit plus one ulp.
+          pi_s='3.141592653589793238462643383279502884197169399375105820974944592307816406286208998628034825342117067982148086513282306647093844609550582231725359408128'
+          S10=10**150
+          pi_lo=Fraction(int(pi_s.replace('.','')),S10)
+          pi_hi=pi_lo+Fraction(1,S10)
+          # Certified rational enclosure for sqrt(N).
+          S=10**170; sf=math.isqrt(N*S*S)
+          sqrt_lo=Fraction(sf,S); sqrt_hi=Fraction(sf+1,S)
+          alpha_lo=2*pi_lo/sqrt_hi; alpha_hi=2*pi_hi/sqrt_lo
+          # Exact alternating-series enclosure of exp(-x), valid because 0<x<1.
+          def alt_sum(x,n):
+              term=Fraction(1); total=term
+              for j in range(1,n+1):
+                  term *= -x/Fraction(j)
+                  total += term
+              return total
+          rlo_q=alt_sum(alpha_hi,15)  # odd partial sum is below exp(-alpha_hi)
+          rhi_q=alt_sum(alpha_lo,14)  # even partial sum is above exp(-alpha_lo)
+          assert 0<rlo_q<rhi_q<1
+          P=150
+          def dec_out(fr, rounding):
+              with localcontext(Context(prec=P,rounding=rounding)):
+                  return Decimal(fr.numerator)/Decimal(fr.denominator)
+          rlo=dec_out(rlo_q,ROUND_FLOOR); rhi=dec_out(rhi_q,ROUND_CEILING)
+          down=Context(prec=P,rounding=ROUND_FLOOR); up=Context(prec=P,rounding=ROUND_CEILING)
+          plo=Decimal(1); phi=Decimal(1); slo=Decimal(0); shi=Decimal(0)
+          for n,a in enumerate(coeffs,1):
+              plo=down.multiply(plo,rlo); phi=up.multiply(phi,rhi)
+              aa=Decimal(a); nn=Decimal(n)
+              if a>=0:
+                  tl=down.divide(down.multiply(aa,plo),nn)
+                  th=up.divide(up.multiply(aa,phi),nn)
+              else:
+                  tl=down.divide(down.multiply(aa,phi),nn)
+                  th=up.divide(up.multiply(aa,plo),nn)
+              slo=down.add(slo,tl); shi=up.add(shi,th)
+          phi_next=up.multiply(phi,rhi)
+          denom=down.subtract(Decimal(1),rhi)
+          # Deligne + d(n)<=2 sqrt(n): |a_n|/n <= 2; outer factor 2 gives 4.
+          tail=up.divide(up.multiply(Decimal(4),phi_next),denom)
+          Llo=down.subtract(down.multiply(Decimal(2),slo),tail)
+          Lhi=up.add(up.multiply(Decimal(2),shi),tail)
+          assert Llo>0 and Llo<Lhi
+          out=(f'DELTA={d}\nTERMS={M}\nCONDUCTOR={N}\nR_LOWER={rlo}\nR_UPPER={rhi}\n'
+               f'TAIL_UPPER={tail}\nL_LOWER={Llo}\nL_UPPER={Lhi}\n')
+          open('results/interval.txt','w').write(out)
+          print(out,end='')
+          PY
+          python3 /tmp/interval.py
+          grep -q '^L_LOWER=' results/interval.txt
+          sha256sum results/* > results/SHA256SUMS
+      - name: Independent prime spot checks
+        env:
+          MODEL: ${{ matrix.model }}
+        run: |
+          python3 - <<'PY' > results/spot_checks.txt
+          import ast,os
+          a=ast.literal_eval(open('results/an.gpvec').read().strip())
+          A1,A2,A3,A4,A6=ast.literal_eval(os.environ['MODEL'])
+          assert A1==A3==0
+          def primes(n):
+              s=[True]*(n+1);s[:2]=[False,False]
+              for i in range(2,int(n**0.5)+1):
+                  if s[i]:
+                      s[i*i:n+1:i]=[False]*(((n-i*i)//i)+1)
+              return [i for i,v in enumerate(s) if v]
+          disc_primes={2,3,5,7,17,23,79,401}
+          checked=0
+          for p in primes(200):
+              if p in disc_primes: continue
+              count=1
+              for x in range(p):
+                  rhs=(x*x*x+A2*x*x+A4*x+A6)%p
+                  count += 1 if rhs==0 else 2 if pow(rhs,(p-1)//2,p)==1 else 0
+              ap=p+1-count
+              assert a[p-1]==ap,(p,a[p-1],ap)
+              print(p,ap,count)
+              checked+=1
+          assert checked>=35
+          print('PASS',checked)
+          PY
+          cat results/spot_checks.txt
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: e0-lvalue-${{ matrix.delta }}
+          path: results/
+          if-no-files-found: error
