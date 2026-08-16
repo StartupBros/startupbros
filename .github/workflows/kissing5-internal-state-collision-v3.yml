@@ -1,0 +1,55 @@
+name: kissing5-internal-state-collision-v3
+
+on:
+  push:
+    branches:
+      - kissing5-relay-20260814
+    paths:
+      - .github/workflows/kissing5-internal-state-collision-v3.yml
+      - research/patch_kissing5_internal_state_solver.py
+      - research/kissing5_internal_state_collision_v3.jl
+  workflow_dispatch:
+
+jobs:
+  internal-state-collision-v3:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      JULIA_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.12.6'
+
+      - name: Clone, patch, and instantiate fixed solver
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/nanleij/ClusteredLowRankSolver.jl.git clrs
+          git -C clrs checkout 09ac81aed031bdea714832cf515244f6eb223531
+          python3 research/patch_kissing5_internal_state_solver.py
+          git -C clrs diff -- src/solver.jl | tee internal_state.patch
+          julia --project=clrs -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+
+      - name: Run exact internal-state collision
+        run: |
+          set -euxo pipefail
+          mkdir -p results
+          cp internal_state.patch results/
+          cp research/patch_kissing5_internal_state_solver.py results/
+          cp research/kissing5_internal_state_collision_v3.jl results/
+          cp .github/workflows/kissing5-internal-state-collision-v3.yml results/workflow.yml
+          julia --project=clrs research/kissing5_internal_state_collision_v3.jl > results/solve.log 2>&1
+          grep -q INTERNAL_STATE_COLLISION_V3_COMPLETE results/solve.log
+          sha256sum results/* > results/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kissing5-internal-state-collision-v3
+          path: results/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 9
