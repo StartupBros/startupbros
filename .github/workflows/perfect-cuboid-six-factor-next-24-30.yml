@@ -1,0 +1,81 @@
+name: perfect-cuboid-six-factor-next-24-30
+
+on:
+  push:
+    branches: [math/perfect-cuboid-23-22-two-cover]
+    paths: [.github/workflows/perfect-cuboid-six-factor-next-24-30.yml]
+  workflow_dispatch:
+
+jobs:
+  screen:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        m: [24,25,26,27,28,29,30]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exact Magma six-factor screen
+        env:
+          MM: ${{ matrix.m }}
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          cat > /tmp/screen.py <<'PY'
+          import html, os, re, requests, time
+          M=int(os.environ['MM'])
+          code=f'''
+          SetColumns(0);
+          function C(M,N,i)
+            a:=M^2-N^2; b:=2*M*N; q:=a^2*b^2;
+            if i eq 1 then return EllipticCurve([0,a^2-b^2,0,-q,0]);
+            elif i eq 2 then return EllipticCurve([0,b^2-a^2,0,-q,0]);
+            elif i eq 3 then return EllipticCurve([0,a^4+b^4,0,a^4*b^4,0]);
+            elif i eq 4 then return EllipticCurve([0,a^2+b^2,0,q,0]);
+            elif i eq 5 then return EllipticCurve([0,-a^2-b^2,0,q,0]);
+            else return EllipticCurve([0,30*a*b+5*(a+b)^2,0,200*q+150*a*b*(a+b)^2,1000*q*(a+b)^2]);
+            end if;
+          end function;
+          M:={M};
+          for N in [1..M-1] do
+            if GCD(M,N) eq 1 and IsOdd(M-N) then
+              V:=[]; kill:=0; amb:=false;
+              for i in [1..6] do
+                l,u:=RankBounds(C(M,N,i)); Append(~V,<l,u>);
+                if u eq 0 then kill:=i; break; end if;
+                if l eq 0 then amb:=true; end if;
+              end for;
+              if kill ne 0 then print "KILL",M,N,kill,V;
+              elif #V eq 6 and not amb then print "SURV",M,N,V;
+              else print "AMBIG",M,N,V; end if;
+            end if;
+          end for;
+          '''
+          last=None
+          for attempt in range(1,7):
+              try:
+                  r=requests.post('https://magma.maths.usyd.edu.au/xml/calculator.xml',data={'input':code},timeout=89)
+                  last=(r.status_code,r.text)
+                  if r.status_code==200 and '<offline>' not in r.text and '<warning>' not in r.text:
+                      break
+              except Exception as e:
+                  last=('EXC',repr(e))
+              time.sleep(8*attempt)
+          if not last or last[0]!=200:
+              raise SystemExit(f'calculator failed: {last!r}')
+          text=last[1]
+          open('results/raw.xml','w').write(text)
+          lines=[html.unescape(x) for x in re.findall(r'<line>(.*?)</line>',text,flags=re.S)]
+          out='\n'.join(lines).strip()+'\n'
+          open('results/output.txt','w').write(out)
+          print(out)
+          if 'Runtime error' in out or '>>' in out or not out.strip():
+              raise SystemExit('Magma error or empty output')
+          PY
+          python3 /tmp/screen.py
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: six-factor-next-M-${{ matrix.m }}
+          path: results/
+          if-no-files-found: error
