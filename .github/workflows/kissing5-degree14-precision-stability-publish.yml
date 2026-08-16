@@ -1,0 +1,83 @@
+name: kissing5-degree14-precision-stability-publish
+
+on:
+  workflow_run:
+    workflows: ["kissing5-degree14-precision-stability"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: kissing5-relay-20260814
+          fetch-depth: 0
+      - name: Download all precision-stability artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: inputs
+          pattern: kissing5-degree14-*
+          merge-multiple: false
+          repository: StartupBros/startupbros
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build fail-closed summary package
+        env:
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+          SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          SOURCE_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+        run: |
+          set -euxo pipefail
+          out=research/kissing5/checkpoint32
+          rm -rf "$out"
+          mkdir -p "$out/raw"
+          python3 - <<'PY'
+          from pathlib import Path
+          import os,json,hashlib,shutil
+          root=Path('inputs'); out=Path('research/kissing5/checkpoint32')
+          records=[]
+          for d in sorted(root.iterdir()):
+              if not d.is_dir(): continue
+              rec={'artifact':d.name,'files':[]}
+              for p in sorted(d.rglob('*')):
+                  if p.is_file():
+                      rel=str(p.relative_to(d))
+                      rec['files'].append({'path':rel,'size':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()})
+                      if p.name in {'summary.tsv','iterates.tsv','audit.tsv','audit.log','validation.log','solver_exit_status.txt','truncation_exit_status.txt'} or p.name.endswith('.json'):
+                          dest=out/'raw'/d.name/rel
+                          dest.parent.mkdir(parents=True,exist_ok=True)
+                          shutil.copy2(p,dest)
+              records.append(rec)
+          manifest={
+            'status':'COLLECTED',
+            'source_run_id':int(os.environ['SOURCE_RUN_ID']),
+            'source_head_sha':os.environ['SOURCE_HEAD_SHA'],
+            'source_conclusion':os.environ['SOURCE_CONCLUSION'],
+            'artifacts':records,
+          }
+          (out/'artifact_manifest.json').write_text(json.dumps(manifest,indent=2))
+          required=[
+            out/'raw'/'kissing5-degree14-p192-3iter'/'summary.tsv',
+            out/'raw'/'kissing5-degree14-p192-3iter'/'iterates.tsv',
+            out/'raw'/'kissing5-degree14-p224-3iter'/'summary.tsv',
+            out/'raw'/'kissing5-degree14-p224-3iter'/'iterates.tsv',
+            out/'raw'/'kissing5-degree14-precision-stability-audit'/'audit.tsv',
+          ]
+          missing=[str(p) for p in required if not p.exists()]
+          (out/'collection_validation.json').write_text(json.dumps({'status':'PASS' if not missing else 'FAIL','missing':missing},indent=2))
+          if missing: raise SystemExit('missing required files: '+repr(missing))
+          PY
+          find "$out" -type f -print0 | sort -z | xargs -0 sha256sum > "$out/SHA256SUMS.txt"
+      - name: Commit summary package
+        run: |
+          set -euxo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add research/kissing5/checkpoint32
+          git commit -m "Record degree-14 precision stability checkpoint" || exit 0
+          git push origin HEAD:kissing5-relay-20260814
