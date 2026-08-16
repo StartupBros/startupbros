@@ -1,0 +1,129 @@
+name: kissing5-zero-step-roundtrip
+
+on:
+  push:
+    branches:
+      - kissing5-relay-20260814
+    paths:
+      - .github/workflows/kissing5-zero-step-roundtrip.yml
+  workflow_dispatch:
+
+jobs:
+  zero-step-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      JULIA_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.12.6'
+      - name: Clone fixed solver
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/nanleij/ClusteredLowRankSolver.jl.git clrs
+          git -C clrs checkout 09ac81aed031bdea714832cf515244f6eb223531
+          julia --project=clrs -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+      - uses: actions/download-artifact@v4
+        with:
+          name: kissing5-degree14-192N
+          path: input
+          repository: StartupBros/startupbros
+          run-id: 31872356942
+          github-token: ${{ github.token }}
+      - name: Exact zero-step public warm-start audit
+        run: |
+          set -euxo pipefail
+          mkdir -p results
+          cp .github/workflows/kissing5-zero-step-roundtrip.yml results/workflow.yml
+          julia --project=clrs - <<'JULIA' > results/solve.log 2>&1
+          using Serialization
+          include("clrs/examples/ThreePointBound.jl")
+          using .ThreePointBound, ClusteredLowRankSolver
+          const PREC=192
+          d0,p0=deserialize("input/checkpoint.jls")
+
+          function cmpdict(a,b)
+              @assert Set(keys(a))==Set(keys(b)); e=n=0; md=BigFloat(0); first=nothing
+              for k in sort!(collect(keys(a)),by=string)
+                  A=Matrix(a[k]); B=Matrix(b[k]); @assert size(A)==size(B)
+                  for i in eachindex(A)
+                      q=abs(BigFloat(A[i])-BigFloat(B[i])); e+=1
+                      if q!=0; n+=1; isnothing(first)&&(first=(repr(k),i,string(q))); end
+                      md=max(md,q)
+                  end
+              end
+              (entries=e,nonzero=n,maxdiff=md,first=first)
+          end
+          function cmppair(d1,p1,d2,p2)
+              dm=cmpdict(d1.matrixvars,d2.matrixvars); pm=cmpdict(p1.matrixvars,p2.matrixvars)
+              xe=xn=0; xd=BigFloat(0); xf=nothing
+              @assert length(d1.x)==length(d2.x)
+              for j in eachindex(d1.x),i in eachindex(d1.x[j])
+                  q=abs(BigFloat(d1.x[j][i])-BigFloat(d2.x[j][i])); xe+=1
+                  if q!=0; xn+=1; isnothing(xf)&&(xf=(j,i,string(q))); end
+                  xd=max(xd,q)
+              end
+              @assert Set(keys(p1.freevars))==Set(keys(p2.freevars))
+              fe=fn=0; fd=BigFloat(0)
+              for k in keys(p1.freevars)
+                  q=abs(BigFloat(p1.freevars[k])-BigFloat(p2.freevars[k])); fe+=1; fn+=(q!=0); fd=max(fd,q)
+              end
+              (entries=dm.entries+pm.entries+xe+fe,nonzero=dm.nonzero+pm.nonzero+xn+fn,
+               maxdiff=max(dm.maxdiff,pm.maxdiff,xd,fd),dual_matrix=dm,primal_matrix=pm,
+               x_entries=xe,x_nonzero=xn,x_maxdiff=xd,free_entries=fe,free_nonzero=fn)
+          end
+
+          block_keys_dual=count(k->k isa ClusteredLowRankSolver.Block,keys(d0.matrixvars))
+          block_keys_primal=count(k->k isa ClusteredLowRankSolver.Block,keys(p0.matrixvars))
+
+          problem,dz,pz=three_point_spherical_codes(5,1//2,14,14;
+              prec=PREC,matmul_prec=PREC,preprocess=false,maxiterations=0,
+              duality_gap_threshold=big"1e-80",dual_error_threshold=big"1e-80",
+              primal_error_threshold=big"1e-80",omega_d=10^3,omega_p=10^3,
+              step_length_threshold=big"1e-30",verbose=false,dualsol=d0,primalsol=p0)
+          clean=cmppair(d0,p0,dz,pz)
+
+          d1=deepcopy(d0); p1=deepcopy(p0)
+          k=first(sort!(collect(keys(d1.matrixvars)),by=string)); delta=BigFloat(2)^(-100)
+          d1.matrixvars[k][1,1]+=delta
+          _,db,pb=three_point_spherical_codes(5,1//2,14,14;
+              prec=PREC,matmul_prec=PREC,preprocess=false,maxiterations=0,
+              duality_gap_threshold=big"1e-80",dual_error_threshold=big"1e-80",
+              primal_error_threshold=big"1e-80",omega_d=10^3,omega_p=10^3,
+              step_length_threshold=big"1e-30",verbose=false,dualsol=d1,primalsol=p1)
+          adv=cmppair(dz,pz,db,pb)
+          @assert adv.nonzero==1 && adv.maxdiff==delta
+
+          open("results/summary.tsv","w") do io
+              println(io,"status\tPASS")
+              println(io,"solver_commit\t09ac81aed031bdea714832cf515244f6eb223531")
+              println(io,"precision\t",PREC)
+              println(io,"dual_matrix_keys\t",length(d0.matrixvars))
+              println(io,"primal_matrix_keys\t",length(p0.matrixvars))
+              println(io,"dual_Block_keys\t",block_keys_dual)
+              println(io,"primal_Block_keys\t",block_keys_primal)
+              println(io,"roundtrip_entries\t",clean.entries)
+              println(io,"roundtrip_nonzero\t",clean.nonzero)
+              println(io,"roundtrip_maxdiff\t",clean.maxdiff)
+              println(io,"roundtrip_exact\t",clean.nonzero==0)
+              println(io,"adversarial_key\t",repr(k))
+              println(io,"adversarial_delta\t",delta)
+              println(io,"adversarial_nonzero\t",adv.nonzero)
+              println(io,"adversarial_maxdiff\t",adv.maxdiff)
+          end
+          println("ZERO_STEP_ROUNDTRIP_COMPLETE")
+          JULIA
+          grep -q ZERO_STEP_ROUNDTRIP_COMPLETE results/solve.log
+          sha256sum results/* > results/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kissing5-zero-step-roundtrip
+          path: results/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 9
