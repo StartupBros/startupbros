@@ -1,0 +1,445 @@
+name: kissing5-internal-state-collision
+
+on:
+  push:
+    branches:
+      - kissing5-relay-20260814
+    paths:
+      - .github/workflows/kissing5-internal-state-collision.yml
+  workflow_dispatch:
+
+jobs:
+  internal-state-collision:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      JULIA_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.12.6'
+
+      - name: Clone, patch, and instantiate fixed solver
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/nanleij/ClusteredLowRankSolver.jl.git clrs
+          git -C clrs checkout 09ac81aed031bdea714832cf515244f6eb223531
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('clrs/src/solver.jl')
+          text = p.read_text()
+
+          old_sig = '\ttesting=false, # print the times of the first two iterations. This is for testing purposes\n)'
+          new_sig = '''\ttesting=false, # print the times of the first two iterations. This is for testing purposes
+    skip_convert=false,
+    converted_sdp_callback=nothing,
+    internal_state_callback=nothing,
+    mirror_warmstart_upper=false,
+)'''
+          assert text.count(old_sig) == 1, text.count(old_sig)
+          text = text.replace(old_sig, new_sig, 1)
+
+          old_conv = '    sdp = convert_to_prec(sdp, prec) #\n'
+          new_conv = '''    if !skip_convert
+        sdp = convert_to_prec(sdp, prec)
+    end
+    if !isnothing(converted_sdp_callback)
+        converted_sdp_callback(sdp)
+    end
+'''
+          assert text.count(old_conv) == 1, text.count(old_conv)
+          text = text.replace(old_conv, new_conv, 1)
+
+          old_import = '''                    if !isnothing(dualsol)
+                        X.blocks[j].blocks[k][hs, vs] = dualsol.matrixvars[bl]
+                    end
+                    if !isnothing(primalsol)
+                        Y.blocks[j].blocks[k][hs, vs] = primalsol.matrixvars[bl]
+                    end
+'''
+          new_import = '''                    if !isnothing(dualsol)
+                        X.blocks[j].blocks[k][hs, vs] = dualsol.matrixvars[bl]
+                        if mirror_warmstart_upper && r != s
+                            X.blocks[j].blocks[k][vs, hs] = transpose(Matrix(dualsol.matrixvars[bl]))
+                        end
+                    end
+                    if !isnothing(primalsol)
+                        Y.blocks[j].blocks[k][hs, vs] = primalsol.matrixvars[bl]
+                        if mirror_warmstart_upper && r != s
+                            Y.blocks[j].blocks[k][vs, hs] = transpose(Matrix(primalsol.matrixvars[bl]))
+                        end
+                    end
+'''
+          assert text.count(old_import) == 1, text.count(old_import)
+          text = text.replace(old_import, new_import, 1)
+
+          initial_marker = '    #check sizes:\n'
+          initial_callback = '''    if !isnothing(internal_state_callback)
+        internal_state_callback(:initial, 0, x, X, y, Y, sdp)
+    end
+'''
+          assert text.count(initial_marker) == 1, text.count(initial_marker)
+          text = text.replace(initial_marker, initial_callback + initial_marker, 1)
+
+          post_marker = '        # saving the solution\n'
+          post_callback = '''        if !isnothing(internal_state_callback)
+            internal_state_callback(:post_update, iter, x, X, y, Y, sdp)
+        end
+'''
+          assert text.count(post_marker) == 1, text.count(post_marker)
+          text = text.replace(post_marker, post_callback + post_marker, 1)
+
+          p.write_text(text)
+          print('PATCH_APPLIED_INTERNAL_STATE_COLLISION')
+          PY
+          git -C clrs diff -- src/solver.jl | tee internal_state.patch
+          julia --project=clrs -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+
+      - name: Run internal-state collision and mirror repair
+        run: |
+          set -euxo pipefail
+          mkdir -p results
+          cp internal_state.patch results/
+          cp .github/workflows/kissing5-internal-state-collision.yml results/workflow.yml
+          julia --project=clrs - <<'JULIA' > results/solve.log 2>&1
+          using SHA
+          include("clrs/examples/ThreePointBound.jl")
+          using .ThreePointBound, ClusteredLowRankSolver, Arblib
+
+          const PREC = 192
+          const COMMON = (
+              prec=PREC,
+              matmul_prec=PREC,
+              preprocess=false,
+              duality_gap_threshold=big"1e-80",
+              dual_error_threshold=big"1e-80",
+              primal_error_threshold=big"1e-80",
+              omega_d=10^3,
+              omega_p=10^3,
+              step_length_threshold=big"1e-30",
+              verbose=false,
+          )
+
+          struct SnapshotStop <: Exception end
+
+          mutable struct CatStat
+              entries::Int
+              nonzero::Int
+              mid_nonzero::Int
+              rad_nonzero::Int
+          end
+
+          function arb_parts(z)
+              m = Base.decompose(Arblib.midref(z))
+              r = Base.decompose(Arblib.radref(z))
+              mid = string(m[1], ",", m[2], ",", m[3])
+              rad = string(r[1], ",", r[2], ",", r[3])
+              return mid, rad
+          end
+
+          function row_blocks(sdp, j, l)
+              sizes = [size(first(values(sdp.A[j][l][1,r])), 1) for r=1:size(sdp.A[j][l],1)]
+              reduce(vcat, [fill(r, sizes[r]) for r in eachindex(sizes)])
+          end
+
+          function foreach_state(f, x, X, y, Y, sdp)
+              for i in eachindex(x)
+                  f("x", "represented", string(i), x[i])
+              end
+              for j in eachindex(X.blocks), l in eachindex(X.blocks[j].blocks)
+                  M = X.blocks[j].blocks[l]
+                  rb = row_blocks(sdp, j, l)
+                  @assert length(rb) == size(M,1) == size(M,2)
+                  for col=1:size(M,2), row=1:size(M,1)
+                      cat = rb[row] >= rb[col] ? "represented" : "omitted_upper"
+                      f("X", cat, string(j, ",", l, ",", row, ",", col), M[row,col])
+                  end
+              end
+              for i in eachindex(y)
+                  f("y", "represented", string(i), y[i])
+              end
+              for j in eachindex(Y.blocks), l in eachindex(Y.blocks[j].blocks)
+                  M = Y.blocks[j].blocks[l]
+                  rb = row_blocks(sdp, j, l)
+                  @assert length(rb) == size(M,1) == size(M,2)
+                  for col=1:size(M,2), row=1:size(M,1)
+                      cat = rb[row] >= rb[col] ? "represented" : "omitted_upper"
+                      f("Y", cat, string(j, ",", l, ",", row, ",", col), M[row,col])
+                  end
+              end
+          end
+
+          function write_state(path, x, X, y, Y, sdp)
+              count = Ref(0)
+              open(path, "w") do io
+                  foreach_state(x, X, y, Y, sdp) do comp, cat, label, z
+                      mid, rad = arb_parts(z)
+                      println(io, comp, '\t', cat, '\t', label, '\t', mid, '\t', rad)
+                      count[] += 1
+                  end
+              end
+              count[]
+          end
+
+          function compare_state(path, x, X, y, Y, sdp)
+              cats = Dict{String,CatStat}()
+              total_entries=0; total_nonzero=0; total_mid=0; total_rad=0
+              firstdiff=nothing
+              open(path, "r") do io
+                  foreach_state(x, X, y, Y, sdp) do comp, cat, label, z
+                      @assert !eof(io)
+                      fields = split(chomp(readline(io)), '\t')
+                      @assert length(fields) == 5
+                      @assert fields[1] == comp && fields[2] == cat && fields[3] == label
+                      mid, rad = arb_parts(z)
+                      md = fields[4] != mid
+                      rd = fields[5] != rad
+                      diff = md || rd
+                      key = string(comp, ":", cat)
+                      st = get!(cats, key) do
+                          CatStat(0,0,0,0)
+                      end
+                      st.entries += 1
+                      st.nonzero += diff
+                      st.mid_nonzero += md
+                      st.rad_nonzero += rd
+                      total_entries += 1
+                      total_nonzero += diff
+                      total_mid += md
+                      total_rad += rd
+                      if diff && isnothing(firstdiff)
+                          firstdiff = (component=comp, category=cat, label=label,
+                                       direct_mid=fields[4], warm_mid=mid,
+                                       direct_rad=fields[5], warm_rad=rad)
+                      end
+                  end
+                  @assert eof(io)
+              end
+              return (entries=total_entries, nonzero=total_nonzero,
+                      mid_nonzero=total_mid, rad_nonzero=total_rad,
+                      cats=cats, firstdiff=firstdiff)
+          end
+
+          function cmp_matrixvars(a, b)
+              @assert Set(keys(a)) == Set(keys(b))
+              entries=0; nonzero=0; maxdiff=BigFloat(0); firstdiff=nothing
+              for key in sort!(collect(keys(a)), by=string)
+                  A=Matrix(a[key]); B=Matrix(b[key]); @assert size(A)==size(B)
+                  for idx in eachindex(A)
+                      delta=abs(BigFloat(A[idx])-BigFloat(B[idx])); entries+=1
+                      if delta != 0
+                          nonzero+=1
+                          isnothing(firstdiff) && (firstdiff=(repr(key),idx,string(A[idx]),string(B[idx]),string(delta)))
+                      end
+                      maxdiff=max(maxdiff,delta)
+                  end
+              end
+              (entries=entries,nonzero=nonzero,maxdiff=maxdiff,first=firstdiff)
+          end
+
+          function cmp_pair(d1,p1,d2,p2)
+              dm=cmp_matrixvars(d1.matrixvars,d2.matrixvars)
+              pm=cmp_matrixvars(p1.matrixvars,p2.matrixvars)
+              @assert length(d1.x)==length(d2.x)
+              xe=xn=0; xd=BigFloat(0); xf=nothing
+              for j in eachindex(d1.x), i in eachindex(d1.x[j])
+                  delta=abs(BigFloat(d1.x[j][i])-BigFloat(d2.x[j][i])); xe+=1
+                  if delta != 0
+                      xn+=1
+                      isnothing(xf) && (xf=(j,i,string(delta)))
+                  end
+                  xd=max(xd,delta)
+              end
+              @assert Set(keys(p1.freevars)) == Set(keys(p2.freevars)
+              fe=fn=0; fd=BigFloat(0); ff=nothing
+              for key in sort!(collect(keys(p1.freevars)),by=string)
+                  delta=abs(BigFloat(p1.freevars[key])-BigFloat(p2.freevars[key])); fe+=1
+                  if delta != 0
+                      fn+=1
+                      isnothing(ff) && (ff=(repr(key),string(delta)))
+                  end
+                  fd=max(fd,delta)
+              end
+              (entries=dm.entries+pm.entries+xe+fe,
+               nonzero=dm.nonzero+pm.nonzero+xn+fn,
+               maxdiff=max(dm.maxdiff,pm.maxdiff,xd,fd),
+               dual_matrix=dm,primal_matrix=pm,
+               x_entries=xe,x_nonzero=xn,x_maxdiff=xd,
+               free_entries=fe,free_nonzero=fn,free_maxdiff=fd,
+               first_x=xf,first_free=ff)
+          end
+
+          function write_cmp(io, prefix, cmp)
+              println(io, prefix, "_entries\t", cmp.entries)
+              println(io, prefix, "_nonzero\t", cmp.nonzero)
+              println(io, prefix, "_mid_nonzero\t", cmp.mid_nonzero)
+              println(io, prefix, "_rad_nonzero\t", cmp.rad_nonzero)
+              println(io, prefix, "_firstdiff\t", repr(cmp.firstdiff))
+              for key in sort!(collect(keys(cmp.cats)))
+                  safe = replace(key, ":"=>"_")
+                  st = cmp.cats[key]
+                  println(io, prefix, "_", safe, "_entries\t", st.entries)
+                  println(io, prefix, "_", safe, "_nonzero\t", st.nonzero)
+                  println(io, prefix, "_", safe, "_mid_nonzero\t", st.mid_nonzero)
+                  println(io, prefix, "_", safe, "_rad_nonzero\t", st.rad_nonzero)
+              end
+          end
+
+          problem, _, _ = three_point_spherical_codes(5,1//2,14,14; COMMON..., maxiterations=0)
+          sdp_base = ClusteredLowRankSolver.ClusteredLowRankSDP(problem; prec=PREC)
+          threading_base = ClusteredLowRankSolver.ThreadingInfo(sdp_base)
+
+          converted_ref = Ref{Any}()
+          direct_states = Dict{Int,Any}()
+          direct_internal_count = Ref(0)
+          direct_internal_cb = function(phase, iter, x, X, y, Y, sdp)
+              if phase == :post_update && iter == 2
+                  direct_internal_count[] = write_state("results/direct_q2_internal.tsv", x, X, y, Y, sdp)
+              end
+          end
+          direct_solution_cb = function(m,d,p)
+              if m.iter == 2 || m.iter == 3
+                  direct_states[m.iter] = (deepcopy(d),deepcopy(p))
+              end
+          end
+
+          direct_result = ClusteredLowRankSolver.solvesdp(
+              sdp_base, threading_base;
+              COMMON...,
+              maxiterations=3,
+              skip_convert=false,
+              converted_sdp_callback=s->(converted_ref[]=s),
+              internal_state_callback=direct_internal_cb,
+              solution_callback=direct_solution_cb,
+          )
+          d2,p2 = direct_states[2]
+          d3,p3 = direct_states[3]
+          @assert direct_internal_count[] == 458998
+          @assert cmp_pair(d3,p3,direct_result.dualsol,direct_result.primalsol).nonzero == 0
+          sdp_converted = converted_ref[]
+
+          unmirrored_ref = Ref{Any}()
+          unmirrored_cb = function(phase,iter,x,X,y,Y,sdp)
+              if phase == :initial
+                  unmirrored_ref[] = compare_state("results/direct_q2_internal.tsv", x,X,y,Y,sdp)
+                  throw(SnapshotStop())
+              end
+          end
+          try
+              ClusteredLowRankSolver.solvesdp(
+                  sdp_converted, threading_base;
+                  COMMON..., maxiterations=0, skip_convert=true,
+                  dualsol=d2, primalsol=p2,
+                  mirror_warmstart_upper=false,
+                  internal_state_callback=unmirrored_cb,
+              )
+              error("unmirrored snapshot did not stop")
+          catch e
+              e isa SnapshotStop || rethrow()
+          end
+
+          mirrored_initial_ref = Ref{Any}()
+          mirrored_measurements = Dict{Int,Any}()
+          mirrored_cb = function(phase,iter,x,X,y,Y,sdp)
+              if phase == :initial
+                  mirrored_initial_ref[] = compare_state("results/direct_q2_internal.tsv", x,X,y,Y,sdp)
+              end
+          end
+          mirrored_solution_cb = function(m,d,p)
+              mirrored_measurements[m.iter] = m
+          end
+          mirrored_result = ClusteredLowRankSolver.solvesdp(
+              sdp_converted, threading_base;
+              COMMON..., maxiterations=1, skip_convert=true,
+              dualsol=d2, primalsol=p2,
+              mirror_warmstart_upper=true,
+              internal_state_callback=mirrored_cb,
+              solution_callback=mirrored_solution_cb,
+          )
+          mirror_q3_cmp = cmp_pair(d3,p3,mirrored_result.dualsol,mirrored_result.primalsol)
+
+          d2_bad=deepcopy(d2); p2_bad=deepcopy(p2)
+          bad_key=first(sort!(collect(keys(d2_bad.matrixvars)),by=string))
+          bad_delta=setprecision(BigFloat,PREC) do; BigFloat(2)^(-100); end
+          d2_bad.matrixvars[bad_key][1,1] += bad_delta
+          adversarial_ref=Ref{Any}()
+          adversarial_cb=function(phase,iter,x,X,y,Y,sdp)
+              if phase == :initial
+                  adversarial_ref[] = compare_state("results/direct_q2_internal.tsv",x,X,y,Y,sdp)
+                  throw(SnapshotStop())
+              end
+          end
+          try
+              ClusteredLowRankSolver.solvesdp(
+                  sdp_converted, threading_base;
+                  COMMON..., maxiterations=0, skip_convert=true,
+                  dualsol=d2_bad, primalsol=p2_bad,
+                  mirror_warmstart_upper=true,
+                  internal_state_callback=adversarial_cb,
+              )
+              error("adversarial snapshot did not stop")
+          catch e
+              e isa SnapshotStop || rethrow()
+          end
+
+          unmirrored = unmirrored_ref[]
+          mirrored = mirrored_initial_ref[]
+          adversarial = adversarial_ref[]
+          @assert unmirrored.entries == mirrored.entries == adversarial.entries == 458998
+          @assert adversarial.nonzero == mirrored.nonzero + 1
+          @assert adversarial.rad_nonzero == mirrored.rad_nonzero
+          @assert adversarial.cats["X:represented"].nonzero == mirrored.cats["X:represented"].nonzero + 1
+
+          open("results/summary.tsv","w") do io
+              println(io,"status\tPASS")
+              println(io,"solver_commit\t09ac81aed031bdea714832cf515244f6eb223531")
+              println(io,"precision\t",PREC)
+              println(io,"threads\t",Threads.nthreads())
+              println(io,"direct_internal_entries\t",direct_internal_count[])
+              write_cmp(io,"unmirrored",unmirrored)
+              write_cmp(io,"mirrored",mirrored)
+              write_cmp(io,"adversarial",adversarial)
+              println(io,"bad_key\t",repr(bad_key))
+              println(io,"bad_delta\t",bad_delta)
+              println(io,"mirror_q3_entries\t",mirror_q3_cmp.entries)
+              println(io,"mirror_q3_nonzero\t",mirror_q3_cmp.nonzero)
+              println(io,"mirror_q3_maxdiff\t",mirror_q3_cmp.maxdiff)
+              println(io,"mirror_q3_first_dual_matrix\t",repr(mirror_q3_cmp.dual_matrix.first))
+              println(io,"mirror_q3_first_primal_matrix\t",repr(mirror_q3_cmp.primal_matrix.first))
+              println(io,"direct_primal_objective\t",direct_result.primalobj)
+              println(io,"direct_dual_objective\t",direct_result.dualobj)
+              println(io,"mirrored_primal_objective\t",mirrored_result.primalobj)
+              println(io,"mirrored_dual_objective\t",mirrored_result.dualobj)
+              if haskey(mirrored_measurements,1)
+                  for f in (:mu,:d_obj,:p_obj,:dual_gap,:D_error,:d_error,:p_error,:alpha_d,:alpha_p,:beta)
+                      println(io,"mirror_measurement_",f,"\t",getproperty(mirrored_measurements[1],f))
+                  end
+              end
+          end
+
+          open("results/result.json","w") do io
+              print(io,"{\n")
+              print(io,"  \"unmirrored_nonzero\": ",unmirrored.nonzero,",\n")
+              print(io,"  \"mirrored_nonzero\": ",mirrored.nonzero,",\n")
+              print(io,"  \"mirror_q3_nonzero\": ",mirror_q3_cmp.nonzero,",\n")
+              print(io,"  \"adversarial_nonzero\": ",adversarial.nonzero,"\n")
+              print(io,"}\n")
+          end
+          println("INTERNAL_STATE_COLLISION_COMPLETE")
+          JULIA
+          grep -q INTERNAL_STATE_COLLISION_COMPLETE results/solve.log
+          sha256sum results/direct_q2_internal.tsv > results/direct_q2_internal.tsv.sha256
+          gzip -9 results/direct_q2_internal.tsv
+          sha256sum results/* > results/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kissing5-internal-state-collision
+          path: results/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 9
