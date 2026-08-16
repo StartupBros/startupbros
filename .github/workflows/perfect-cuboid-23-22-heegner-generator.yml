@@ -1,0 +1,52 @@
+name: perfect-cuboid-23-22-heegner-generator
+
+on:
+  push:
+    branches: [math/perfect-cuboid-23-22-two-cover]
+  workflow_dispatch:
+
+jobs:
+  recover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PARI and eclib
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pari-gp pari-elldata eclib-tools
+      - name: Recover and independently saturate rank-one point
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          cat > /tmp/heegner.gp <<'GP'
+          default(parisizemax, 12000000000);
+          default(realprecision, 100);
+          E=ellinit([0,6575009540,0,5596892154988528900,0]);
+          print("MODEL=",E[1..5]);
+          print("ROOTNO=",ellrootno(E));
+          print("ANALYTIC=",ellanalyticrank(E));
+          P=ellheegnertwist(E);
+          print("HEEGNER_TWIST=",P);
+          print("ONCURVE=",ellisoncurve(E,P));
+          print("HEIGHT=",ellheight(E,P));
+          W=ellsaturation(E,[P],10000);
+          print("SAT10000=",W);
+          print("SATHEIGHT=",ellheight(E,W[1]));
+          print("RANK_WITH_POINT=",ellrank(E,0,W));
+          print("TORSION=",elltors(E));
+          quit;
+          GP
+          GP_COLORS='' gp -q -s 12000000000 /tmp/heegner.gp > results/pari.txt 2>&1
+          cat results/pari.txt
+          grep -q '^ROOTNO=-1$' results/pari.txt
+          grep -q '^ONCURVE=1$' results/pari.txt
+          grep -q '^RANK_WITH_POINT=\[1, 1,' results/pari.txt
+          ! grep -Eq 'syntax error|incorrect type|at top-level|stack overflows|not enough memory' results/pari.txt
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perfect-cuboid-23-22-heegner-generator
+          path: results/
+          if-no-files-found: error
