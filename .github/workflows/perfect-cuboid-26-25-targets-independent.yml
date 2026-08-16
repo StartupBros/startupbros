@@ -1,0 +1,64 @@
+name: perfect-cuboid-26-25-targets-independent
+
+on:
+  push:
+    paths:
+      - '.github/workflows/perfect-cuboid-26-25-targets-independent.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  target:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: omit1
+            model: '0,-20904010,0,60840078000025,0'
+          - label: omit2
+            model: '0,-19578010,0,71622453630025,0'
+          - label: omit3
+            model: '0,-3978000,0,439569000000,0'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install exact arithmetic tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pari-gp pari-elldata eclib-tools
+      - name: Independent exact rank, torsion, and basis
+        env:
+          MODEL: ${{ matrix.model }}
+          LABEL: ${{ matrix.label }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          echo "[$MODEL]" | mwrank -v 1 -p 1000 > results/mwrank.txt 2>&1 || true
+          cat results/mwrank.txt
+          cat > /tmp/check.gp <<GP
+          default(parisizemax,8000000000);
+          E=ellinit([$MODEL]);
+          print("LABEL=$LABEL");
+          print("GLOBALRED=",ellglobalred(E));
+          print("ROOTNO=",ellrootno(E));
+          print("ANALYTIC=",ellanalyticrank(E));
+          print("RANK=",ellrank(E,1));
+          print("TORSION=",elltors(E));
+          quit;
+          GP
+          GP_COLORS='' gp -q -s 2000000000 /tmp/check.gp > results/pari.txt 2>&1
+          cat results/pari.txt
+          ! grep -Eq 'syntax error|incorrect type|at top-level|stack overflows|not a function' results/pari.txt
+          grep -q '^ROOTNO=-1$' results/pari.txt
+          grep -q '^RANK=\[1, 1,' results/pari.txt
+          grep -q '^TORSION=\[2, \[2\]' results/pari.txt
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perfect-cuboid-26-25-${{ matrix.label }}
+          path: results/
+          if-no-files-found: error
