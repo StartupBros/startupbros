@@ -35,7 +35,6 @@ jobs:
           mkdir -p results
           cp .github/workflows/kissing5-same-compiled-sdp.yml results/workflow.yml
           julia --project=clrs - <<'JULIA' > results/solve.log 2>&1
-          using SHA
           include("clrs/examples/ThreePointBound.jl")
           using .ThreePointBound, ClusteredLowRankSolver
 
@@ -83,7 +82,7 @@ jobs:
                   end
                   xd=max(xd,delta)
               end
-              @assert Set(keys(p1.freevars)) == Set(keys(p2.freevars)
+              @assert Set(keys(p1.freevars)) == Set(keys(p2.freevars))
               fe=fn=0; fd=BigFloat(0); ff=nothing
               for key in sort!(collect(keys(p1.freevars)),by=string)
                   delta=abs(BigFloat(p1.freevars[key])-BigFloat(p2.freevars[key])); fe+=1
@@ -102,7 +101,6 @@ jobs:
                first_x=xf,first_free=ff)
           end
 
-          # Build the symbolic problem without taking a solver step.
           problem, _, _ = three_point_spherical_codes(
               5,1//2,14,14;
               COMMON...,
@@ -163,7 +161,6 @@ jobs:
           rebuilt_cmp=cmp_pair(d3,p3,rebuilt_result.dualsol,rebuilt_result.primalsol)
           same_vs_rebuilt=cmp_pair(same_result.dualsol,same_result.primalsol,rebuilt_result.dualsol,rebuilt_result.primalsol)
 
-          # Independent adversarial round-trip control.
           d_bad=deepcopy(d2); p_bad=deepcopy(p2)
           bad_key=first(sort!(collect(keys(d_bad.matrixvars)),by=string))
           bad_delta=setprecision(BigFloat,PREC) do; BigFloat(2)^(-100); end
@@ -175,9 +172,9 @@ jobs:
               dualsol=d_bad,
               primalsol=p_bad,
           )
-          bad_roundtrip_cmp=cmp_pair(d2,p2,bad_zero.dualsol,bad_zero.primalsol)
-          @assert bad_roundtrip_cmp.nonzero==1
-          @assert bad_roundtrip_cmp.maxdiff==bad_delta
+          bad_vs_clean=cmp_pair(zero_same.dualsol,zero_same.primalsol,bad_zero.dualsol,bad_zero.primalsol)
+          @assert bad_vs_clean.nonzero==1
+          @assert bad_vs_clean.maxdiff==bad_delta
 
           fields=(:mu,:d_obj,:p_obj,:dual_gap,:D_error,:d_error,:p_error,:alpha_d,:alpha_p,:beta)
           open("results/summary.tsv","w") do io
@@ -201,7 +198,7 @@ jobs:
               println(io,"same_vs_rebuilt_maxdiff\t",same_vs_rebuilt.maxdiff)
               println(io,"bad_roundtrip_key\t",repr(bad_key))
               println(io,"bad_roundtrip_delta\t",bad_delta)
-              println(io,"bad_roundtrip_nonzero\t",bad_roundtrip_cmp.nonzero)
+              println(io,"bad_roundtrip_nonzero\t",bad_vs_clean.nonzero)
               for f in fields
                   ds=abs(BigFloat(getproperty(direct_measurements[3],f))-BigFloat(getproperty(same_measurements[1],f)))
                   dr=abs(BigFloat(getproperty(direct_measurements[3],f))-BigFloat(getproperty(rebuilt_measurements[1],f)))
