@@ -1,0 +1,65 @@
+name: perfect-cuboid-24-1-factor3
+
+on:
+  push:
+    branches: [math/perfect-cuboid-23-22-two-cover]
+    paths: [.github/workflows/perfect-cuboid-24-1-factor3.yml]
+  workflow_dispatch:
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PARI and eclib
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pari-gp pari-elldata eclib-tools
+      - name: Exact descent and directed central-value interval
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          MODEL='0,109318199041,0,580278297600000000,0'
+          echo "[$MODEL]" | mwrank -v 1 -p 100 > results/mwrank.txt 2>&1 || true
+          cat results/mwrank.txt
+          cat > /tmp/gen.gp <<'GP'
+          E=ellinit([0,109318199041,0,580278297600000000,0]); M=1000000; a=ellan(E,M); write("results/an.gpvec",a); print("LEN=",#a); print("ROOTNO=",ellrootno(E)); print("GLOBALRED=",ellglobalred(E)); print("ANALYTIC=",ellanalyticrank(E)); print("RANK=",ellrank(E)); print("TORSION=",elltors(E)); quit;
+          GP
+          GP_COLORS='' gp -q -s 1000000000 /tmp/gen.gp > results/pari.txt 2>&1
+          cat results/pari.txt
+          grep -q '^LEN=1000000$' results/pari.txt
+          grep -q '^ROOTNO=1$' results/pari.txt
+          cat > /tmp/interval.py <<'PY'
+          import ast,hashlib,math,re
+          from decimal import Decimal,Context,localcontext,ROUND_FLOOR,ROUND_CEILING
+          from fractions import Fraction
+          from pathlib import Path
+          M=1000000; p=Path('results/an.gpvec'); aa=ast.literal_eval(p.read_text()); assert len(aa)==M
+          meta=Path('results/pari.txt').read_text(); N=int(re.search(r'GLOBALRED=\[(\d+),',meta).group(1)); sha=hashlib.sha256(p.read_bytes()).hexdigest()
+          pis='3.141592653589793238462643383279502884197169399375105820974944592307816406286208998628034825342117067982148086513282306647093844609550582231725359408128'; S10=10**150; plo=Fraction(int(pis.replace('.','')),S10); phi=plo+Fraction(1,S10)
+          S=10**170; sf=math.isqrt(N*S*S); slo=Fraction(sf,S); shi=Fraction(sf+1,S); alo=2*plo/shi; ahi=2*phi/slo
+          def alt(x,n):
+              t=Fraction(1); s=t
+              for j in range(1,n+1): t*=-x/Fraction(j); s+=t
+              return s
+          P=150
+          def cv(x,r):
+              with localcontext(Context(prec=P,rounding=r)): return Decimal(x.numerator)/Decimal(x.denominator)
+          rlo=cv(alt(ahi,15),ROUND_FLOOR); rhi=cv(alt(alo,14),ROUND_CEILING); dn=Context(prec=P,rounding=ROUND_FLOOR); up=Context(prec=P,rounding=ROUND_CEILING)
+          ploD=phiD=Decimal(1); sloD=shiD=Decimal(0)
+          for n,a in enumerate(aa,1):
+              ploD=dn.multiply(ploD,rlo); phiD=up.multiply(phiD,rhi); A=Decimal(a); nn=Decimal(n)
+              if a>=0: lo=dn.divide(dn.multiply(A,ploD),nn); hi=up.divide(up.multiply(A,phiD),nn)
+              else: lo=dn.divide(dn.multiply(A,phiD),nn); hi=up.divide(up.multiply(A,ploD),nn)
+              sloD=dn.add(sloD,lo); shiD=up.add(shiD,hi)
+          tail=up.divide(up.multiply(Decimal(4),up.multiply(phiD,rhi)),dn.subtract(Decimal(1),rhi)); Llo=dn.subtract(dn.multiply(Decimal(2),sloD),tail); Lhi=up.add(up.multiply(Decimal(2),shiD),tail)
+          out=f'COEFF_SHA256={sha}\nM={M}\nN={N}\nTAIL_UPPER={tail}\nL_LOWER={Llo}\nL_UPPER={Lhi}\nPOSITIVE={Llo>0}\n'; Path('results/interval.txt').write_text(out); print(out,end='')
+          assert Llo>0
+          PY
+          python3 /tmp/interval.py
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perfect-cuboid-24-1-factor3
+          path: results/
+          if-no-files-found: error
