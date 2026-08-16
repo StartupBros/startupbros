@@ -1,0 +1,135 @@
+name: kissing5-same-process-warmstart-compact
+
+on:
+  push:
+    branches: [kissing5-relay-20260814]
+    paths: [.github/workflows/kissing5-same-process-warmstart-compact.yml]
+  workflow_dispatch:
+
+jobs:
+  exact-collision:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    env:
+      JULIA_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.12.6'
+      - name: Clone fixed solver
+        run: |
+          git clone https://github.com/nanleij/ClusteredLowRankSolver.jl.git clrs
+          git -C clrs checkout 09ac81aed031bdea714832cf515244f6eb223531
+          julia --project=clrs -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+      - name: Run exact same-process split collision
+        run: |
+          set -euxo pipefail
+          mkdir -p results
+          cp .github/workflows/kissing5-same-process-warmstart-compact.yml results/workflow.yml
+          julia --project=clrs - <<'JULIA' > results/solve.log 2>&1
+          using Serialization, SHA
+          include("clrs/examples/ThreePointBound.jl")
+          using .ThreePointBound, ClusteredLowRankSolver
+          const PREC=192
+          const KW=(prec=PREC,matmul_prec=PREC,preprocess=false,
+            duality_gap_threshold=big"1e-80",dual_error_threshold=big"1e-80",
+            primal_error_threshold=big"1e-80",omega_d=10^3,omega_p=10^3,
+            step_length_threshold=big"1e-30",verbose=true)
+
+          function cmpdict(a,b)
+            @assert Set(keys(a))==Set(keys(b)); n=z=0; md=BigFloat(0); first=nothing
+            for k in sort!(collect(keys(a)),by=string)
+              A=Matrix(a[k]); B=Matrix(b[k]); @assert size(A)==size(B)
+              for i in eachindex(A)
+                d=abs(BigFloat(A[i])-BigFloat(B[i])); n+=1
+                if d!=0; z+=1; isnothing(first)&&(first=(repr(k),i,string(A[i]),string(B[i]),string(d))); end
+                md=max(md,d)
+              end
+            end
+            (entries=n,nonzero=z,maxdiff=md,first=first)
+          end
+          function cmppair(d1,p1,d2,p2)
+            dm=cmpdict(d1.matrixvars,d2.matrixvars); pm=cmpdict(p1.matrixvars,p2.matrixvars)
+            @assert length(d1.x)==length(d2.x)
+            xn=xe=0; xd=BigFloat(0); xf=nothing
+            for j in eachindex(d1.x), i in eachindex(d1.x[j])
+              q=abs(BigFloat(d1.x[j][i])-BigFloat(d2.x[j][i])); xe+=1
+              if q!=0; xn+=1; isnothing(xf)&&(xf=(j,i,string(q))); end; xd=max(xd,q)
+            end
+            @assert Set(keys(p1.freevars))==Set(keys(p2.freevars)
+            fn=fe=0; fd=BigFloat(0); ff=nothing
+            for k in keys(p1.freevars)
+              q=abs(BigFloat(p1.freevars[k])-BigFloat(p2.freevars[k])); fe+=1
+              if q!=0; fn+=1; isnothing(ff)&&(ff=(repr(k),string(q))); end; fd=max(fd,q)
+            end
+            (entries=dm.entries+pm.entries+xe+fe,
+             nonzero=dm.nonzero+pm.nonzero+xn+fn,
+             maxdiff=max(dm.maxdiff,pm.maxdiff,xd,fd),
+             dual_matrix=dm,primal_matrix=pm,x_entries=xe,x_nonzero=xn,x_maxdiff=xd,
+             free_entries=fe,free_nonzero=fn,free_maxdiff=fd,first_x=xf,first_free=ff)
+          end
+
+          direct=Dict{Int,Any}(); directm=Dict{Int,Any}()
+          cb=function(m,d,p)
+            directm[m.iter]=m
+            m.iter==2 && (direct[2]=(d,p); serialize("results/q2.jls",(d,p)))
+            m.iter==3 && (direct[3]=(d,p); serialize("results/q3_direct.jls",(d,p)))
+          end
+          pd,dd,pd3=three_point_spherical_codes(5,1//2,14,14;KW...,maxiterations=3,solution_callback=cb)
+          d2,p2=direct[2]; d3,p3=direct[3]
+          @assert cmppair(d3,p3,dd,pd3).nonzero==0
+
+          splitm=Dict{Int,Any}()
+          cbs=function(m,d,p); splitm[m.iter]=m; serialize("results/q3_split.jls",(d,p)); end
+          ps,ds,ps3=three_point_spherical_codes(5,1//2,14,14;KW...,maxiterations=1,
+            dualsol=d2,primalsol=p2,solution_callback=cbs)
+          main=cmppair(d3,p3,ds,ps3)
+
+          # Independent adversarial comparator control.
+          dcor,pcor=deepcopy(ds),deepcopy(ps3)
+          k=first(sort!(collect(keys(dcor.matrixvars)),by=string)); delta=BigFloat(2)^(-100)
+          dcor.matrixvars[k][1,1]+=delta
+          corrupt=cmppair(ds,ps3,dcor,pcor)
+          @assert corrupt.nonzero==1 && corrupt.maxdiff==delta
+
+          fields=(:mu,:d_obj,:p_obj,:dual_gap,:D_error,:d_error,:p_error,:alpha_d,:alpha_p,:beta)
+          open("results/summary.tsv","w") do io
+            println(io,"status\tPASS"); println(io,"solver_commit\t09ac81aed031bdea714832cf515244f6eb223531")
+            println(io,"precision\t",PREC); println(io,"threads\t",Threads.nthreads())
+            println(io,"main_entries\t",main.entries); println(io,"main_nonzero\t",main.nonzero)
+            println(io,"main_maxdiff\t",main.maxdiff); println(io,"main_exact_equal\t",main.nonzero==0)
+            println(io,"dual_matrix_entries\t",main.dual_matrix.entries); println(io,"primal_matrix_entries\t",main.primal_matrix.entries)
+            println(io,"dual_x_entries\t",main.x_entries); println(io,"primal_free_entries\t",main.free_entries)
+            println(io,"direct_primal\t",objvalue(pd,p3)); println(io,"split_primal\t",objvalue(ps,ps3))
+            println(io,"direct_dual\t",dualobjvalue(pd,d3)); println(io,"split_dual\t",dualobjvalue(ps,ds))
+            println(io,"q2_sha256\t",bytes2hex(sha256(read("results/q2.jls"))))
+            println(io,"q3_direct_sha256\t",bytes2hex(sha256(read("results/q3_direct.jls"))))
+            println(io,"q3_split_sha256\t",bytes2hex(sha256(read("results/q3_split.jls"))))
+            println(io,"corruption_key\t",repr(k)); println(io,"corruption_delta\t",delta)
+            println(io,"corruption_detected_nonzero\t",corrupt.nonzero)
+            for f in fields
+              q=abs(BigFloat(getproperty(directm[3],f))-BigFloat(getproperty(splitm[1],f)))
+              println(io,"measurement_diff_",f,"\t",q)
+            end
+          end
+          open("results/comparison.json","w") do io
+            print(io,"{\n  \"exact_equal\": ",main.nonzero==0 ? "true" : "false",
+              ",\n  \"entries\": ",main.entries,",\n  \"nonzero\": ",main.nonzero,
+              ",\n  \"maxdiff\": \"",main.maxdiff,"\",\n  \"corruption_nonzero\": ",corrupt.nonzero,"\n}\n")
+          end
+          rm("results/q2.jls","results/q3_direct.jls","results/q3_split.jls")
+          println("COMPACT_WARMSTART_COMPLETE")
+          JULIA
+          grep -q COMPACT_WARMSTART_COMPLETE results/solve.log
+          sha256sum results/* > results/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kissing5-same-process-warmstart-compact
+          path: results/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 9
