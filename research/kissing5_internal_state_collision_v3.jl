@@ -1,4 +1,4 @@
-include("clrs/examples/ThreePointBound.jl")
+include(joinpath(@__DIR__, "..", "clrs", "examples", "ThreePointBound.jl"))
 using .ThreePointBound, ClusteredLowRankSolver, Arblib
 
 const PREC = 192
@@ -37,11 +37,8 @@ function compare_internal(refstate, candstate, sdp)
     xr, Xr, yr, Yr = refstate
     xc, Xc, yc, Yc = candstate
     cats = Dict{String,CatStat}()
-    entries = 0
-    nonzero = 0
-    mid_nonzero = 0
-    rad_nonzero = 0
-    firstdiff = nothing
+    totals = Ref((entries=0, nonzero=0, mid_nonzero=0, rad_nonzero=0))
+    firstdiff = Ref{Any}(nothing)
 
     function account(comp, cat, label, a, b)
         amid, arad = exact_parts(a)
@@ -57,12 +54,15 @@ function compare_internal(refstate, candstate, sdp)
         st.nonzero += df
         st.mid_nonzero += md
         st.rad_nonzero += rd
-        entries += 1
-        nonzero += df
-        mid_nonzero += md
-        rad_nonzero += rd
-        if df && isnothing(firstdiff)
-            firstdiff = (
+        t = totals[]
+        totals[] = (
+            entries=t.entries + 1,
+            nonzero=t.nonzero + df,
+            mid_nonzero=t.mid_nonzero + md,
+            rad_nonzero=t.rad_nonzero + rd,
+        )
+        if df && isnothing(firstdiff[])
+            firstdiff[] = (
                 component=comp,
                 category=cat,
                 label=label,
@@ -111,13 +111,14 @@ function compare_internal(refstate, candstate, sdp)
         end
     end
 
+    t = totals[]
     return (
-        entries=entries,
-        nonzero=nonzero,
-        mid_nonzero=mid_nonzero,
-        rad_nonzero=rad_nonzero,
+        entries=t.entries,
+        nonzero=t.nonzero,
+        mid_nonzero=t.mid_nonzero,
+        rad_nonzero=t.rad_nonzero,
         cats=cats,
-        firstdiff=firstdiff,
+        firstdiff=firstdiff[],
     )
 end
 
