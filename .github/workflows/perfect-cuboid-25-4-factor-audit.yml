@@ -1,0 +1,68 @@
+name: perfect-cuboid-25-4-factor-audit
+
+on:
+  push:
+    branches: [math/perfect-cuboid-23-22-two-cover]
+    paths: [.github/workflows/perfect-cuboid-25-4-factor-audit.yml]
+  workflow_dispatch:
+
+jobs:
+  factor:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        factor: [1,2,3]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Complete two-cover norm and target-rank audit
+        env:
+          FACTOR: ${{ matrix.factor }}
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          cat > /tmp/run.py <<'PY'
+          import html, os, re, requests, time
+          i=int(os.environ['FACTOR'])
+          records={
+            1:(3045,'(x^2+2436000)*(x^2+3272405)'),
+            2:(6090,'(x^2+1218000)*(x^2+3272405)'),
+            3:(5,'(x^2+1218000)*(x^2+2436000)'),
+          }
+          d,g=records[i]
+          code=f'''
+          SetColumns(0);
+          Q:=Rationals(); Qx<x>:=PolynomialRing(Q);
+          f:=(x^2+1218000)*(x^2+2436000)*(x^2+3272405);
+          C:=HyperellipticCurve(f); Hk,AtoHk:=TwoCoverDescent(C); AA<theta>:=Domain(AtoHk);
+          d:={d}; g:={g};
+          L<a>:=NumberField(x^2+d); LX<X>:=PolynomialRing(L); LT<T>:=quo<LX|Evaluate(g,X)>; j:=hom<AA->LT|T>;
+          print "FACTOR",{i},"D",d,"COUNT",#Hk;
+          for h in Hk do gam:=Norm(j(h@@AtoHk)); issq,rt:=IsSquare(gam); print "GAMMA",gam,issq,rt; end for;
+          Cg:=HyperellipticCurve(g); P0:=PointsAtInfinity(Cg)[1]; EQ,ctoE:=EllipticCurve(Cg,P0); ET:=QuadraticTwist(EQ,-d);
+          print "EQ",EQ; print "EQ_RB",RankBounds(EQ); print "EQ_TORS",TorsionSubgroup(EQ);
+          print "ET",ET; print "ET_RB",RankBounds(ET); print "ET_TORS",TorsionSubgroup(ET);
+          '''
+          last=None
+          for attempt in range(1,7):
+              try:
+                  r=requests.post('https://magma.maths.usyd.edu.au/xml/calculator.xml',data={'input':code},timeout=89)
+                  last=(r.status_code,r.text)
+                  if r.status_code==200 and '<offline>' not in r.text and '<warning>' not in r.text:
+                      break
+              except Exception as e:
+                  last=('EXC',repr(e))
+              time.sleep(8*attempt)
+          if not last or last[0]!=200: raise SystemExit(f'calculator failed: {last!r}')
+          text=last[1]; open('results/raw.xml','w').write(text)
+          lines=[html.unescape(x) for x in re.findall(r'<line>(.*?)</line>',text,flags=re.S)]
+          out='\n'.join(lines).strip()+'\n'; open('results/output.txt','w').write(out); print(out)
+          if 'Runtime error' in out or '>>' in out or 'COUNT 2' not in out: raise SystemExit('Magma error or incomplete output')
+          PY
+          python3 /tmp/run.py
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perfect-cuboid-25-4-factor-${{ matrix.factor }}
+          path: results/
+          if-no-files-found: error
