@@ -1,0 +1,232 @@
+name: kissing5-same-compiled-sdp
+
+on:
+  push:
+    branches:
+      - kissing5-relay-20260814
+    paths:
+      - .github/workflows/kissing5-same-compiled-sdp.yml
+  workflow_dispatch:
+
+jobs:
+  compiled-object-collision:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    env:
+      JULIA_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.12.6'
+
+      - name: Clone and instantiate fixed solver
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/nanleij/ClusteredLowRankSolver.jl.git clrs
+          git -C clrs checkout 09ac81aed031bdea714832cf515244f6eb223531
+          julia --project=clrs -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+
+      - name: Compare same compiled SDP and rebuilt compiled SDP warm starts
+        run: |
+          set -euxo pipefail
+          mkdir -p results
+          cp .github/workflows/kissing5-same-compiled-sdp.yml results/workflow.yml
+          julia --project=clrs - <<'JULIA' > results/solve.log 2>&1
+          using SHA
+          include("clrs/examples/ThreePointBound.jl")
+          using .ThreePointBound, ClusteredLowRankSolver
+
+          const PREC = 192
+          const COMMON = (
+              prec=PREC,
+              matmul_prec=PREC,
+              preprocess=false,
+              duality_gap_threshold=big"1e-80",
+              dual_error_threshold=big"1e-80",
+              primal_error_threshold=big"1e-80",
+              omega_d=10^3,
+              omega_p=10^3,
+              step_length_threshold=big"1e-30",
+              verbose=false,
+          )
+
+          function cmp_matrixvars(a, b)
+              @assert Set(keys(a)) == Set(keys(b))
+              entries=0; nonzero=0; maxdiff=BigFloat(0); firstdiff=nothing
+              for key in sort!(collect(keys(a)), by=string)
+                  A=Matrix(a[key]); B=Matrix(b[key]); @assert size(A)==size(B)
+                  for idx in eachindex(A)
+                      delta=abs(BigFloat(A[idx])-BigFloat(B[idx])); entries+=1
+                      if delta != 0
+                          nonzero+=1
+                          isnothing(firstdiff) && (firstdiff=(repr(key),idx,string(A[idx]),string(B[idx]),string(delta)))
+                      end
+                      maxdiff=max(maxdiff,delta)
+                  end
+              end
+              (entries=entries,nonzero=nonzero,maxdiff=maxdiff,first=firstdiff)
+          end
+
+          function cmp_pair(d1,p1,d2,p2)
+              dm=cmp_matrixvars(d1.matrixvars,d2.matrixvars)
+              pm=cmp_matrixvars(p1.matrixvars,p2.matrixvars)
+              @assert length(d1.x)==length(d2.x)
+              xe=xn=0; xd=BigFloat(0); xf=nothing
+              for j in eachindex(d1.x), i in eachindex(d1.x[j])
+                  delta=abs(BigFloat(d1.x[j][i])-BigFloat(d2.x[j][i])); xe+=1
+                  if delta != 0
+                      xn+=1
+                      isnothing(xf) && (xf=(j,i,string(delta)))
+                  end
+                  xd=max(xd,delta)
+              end
+              @assert Set(keys(p1.freevars)) == Set(keys(p2.freevars)
+              fe=fn=0; fd=BigFloat(0); ff=nothing
+              for key in sort!(collect(keys(p1.freevars)),by=string)
+                  delta=abs(BigFloat(p1.freevars[key])-BigFloat(p2.freevars[key])); fe+=1
+                  if delta != 0
+                      fn+=1
+                      isnothing(ff) && (ff=(repr(key),string(delta)))
+                  end
+                  fd=max(fd,delta)
+              end
+              (entries=dm.entries+pm.entries+xe+fe,
+               nonzero=dm.nonzero+pm.nonzero+xn+fn,
+               maxdiff=max(dm.maxdiff,pm.maxdiff,xd,fd),
+               dual_matrix=dm,primal_matrix=pm,
+               x_entries=xe,x_nonzero=xn,x_maxdiff=xd,
+               free_entries=fe,free_nonzero=fn,free_maxdiff=fd,
+               first_x=xf,first_free=ff)
+          end
+
+          # Build the symbolic problem without taking a solver step.
+          problem, _, _ = three_point_spherical_codes(
+              5,1//2,14,14;
+              COMMON...,
+              maxiterations=0,
+          )
+          sdp = ClusteredLowRankSolver.ClusteredLowRankSDP(problem; prec=PREC)
+          threading = ClusteredLowRankSolver.ThreadingInfo(sdp)
+
+          direct_states=Dict{Int,Any}(); direct_measurements=Dict{Int,Any}()
+          direct_callback=function(m,d,p)
+              direct_measurements[m.iter]=m
+              if m.iter==2 || m.iter==3
+                  direct_states[m.iter]=(deepcopy(d),deepcopy(p))
+              end
+          end
+          direct_result = ClusteredLowRankSolver.solvesdp(
+              sdp, threading;
+              COMMON...,
+              maxiterations=3,
+              solution_callback=direct_callback,
+          )
+          d2,p2=direct_states[2]; d3,p3=direct_states[3]
+          @assert cmp_pair(d3,p3,direct_result.dualsol,direct_result.primalsol).nonzero==0
+
+          zero_same = ClusteredLowRankSolver.solvesdp(
+              sdp, threading;
+              COMMON...,
+              maxiterations=0,
+              dualsol=d2,
+              primalsol=p2,
+          )
+          zero_same_cmp=cmp_pair(d2,p2,zero_same.dualsol,zero_same.primalsol)
+
+          same_measurements=Dict{Int,Any}()
+          same_callback=function(m,d,p); same_measurements[m.iter]=m; end
+          same_result = ClusteredLowRankSolver.solvesdp(
+              sdp, threading;
+              COMMON...,
+              maxiterations=1,
+              dualsol=d2,
+              primalsol=p2,
+              solution_callback=same_callback,
+          )
+          same_cmp=cmp_pair(d3,p3,same_result.dualsol,same_result.primalsol)
+
+          sdp_rebuilt = ClusteredLowRankSolver.ClusteredLowRankSDP(problem; prec=PREC)
+          threading_rebuilt = ClusteredLowRankSolver.ThreadingInfo(sdp_rebuilt)
+          rebuilt_measurements=Dict{Int,Any}()
+          rebuilt_callback=function(m,d,p); rebuilt_measurements[m.iter]=m; end
+          rebuilt_result = ClusteredLowRankSolver.solvesdp(
+              sdp_rebuilt, threading_rebuilt;
+              COMMON...,
+              maxiterations=1,
+              dualsol=d2,
+              primalsol=p2,
+              solution_callback=rebuilt_callback,
+          )
+          rebuilt_cmp=cmp_pair(d3,p3,rebuilt_result.dualsol,rebuilt_result.primalsol)
+          same_vs_rebuilt=cmp_pair(same_result.dualsol,same_result.primalsol,rebuilt_result.dualsol,rebuilt_result.primalsol)
+
+          # Independent adversarial round-trip control.
+          d_bad=deepcopy(d2); p_bad=deepcopy(p2)
+          bad_key=first(sort!(collect(keys(d_bad.matrixvars)),by=string))
+          bad_delta=setprecision(BigFloat,PREC) do; BigFloat(2)^(-100); end
+          d_bad.matrixvars[bad_key][1,1]+=bad_delta
+          bad_zero = ClusteredLowRankSolver.solvesdp(
+              sdp, threading;
+              COMMON...,
+              maxiterations=0,
+              dualsol=d_bad,
+              primalsol=p_bad,
+          )
+          bad_roundtrip_cmp=cmp_pair(d2,p2,bad_zero.dualsol,bad_zero.primalsol)
+          @assert bad_roundtrip_cmp.nonzero==1
+          @assert bad_roundtrip_cmp.maxdiff==bad_delta
+
+          fields=(:mu,:d_obj,:p_obj,:dual_gap,:D_error,:d_error,:p_error,:alpha_d,:alpha_p,:beta)
+          open("results/summary.tsv","w") do io
+              println(io,"status\tPASS")
+              println(io,"solver_commit\t09ac81aed031bdea714832cf515244f6eb223531")
+              println(io,"precision\t",PREC)
+              println(io,"threads\t",Threads.nthreads())
+              println(io,"zero_same_entries\t",zero_same_cmp.entries)
+              println(io,"zero_same_nonzero\t",zero_same_cmp.nonzero)
+              println(io,"zero_same_maxdiff\t",zero_same_cmp.maxdiff)
+              println(io,"same_compiled_entries\t",same_cmp.entries)
+              println(io,"same_compiled_nonzero\t",same_cmp.nonzero)
+              println(io,"same_compiled_maxdiff\t",same_cmp.maxdiff)
+              println(io,"same_compiled_exact\t",same_cmp.nonzero==0)
+              println(io,"rebuilt_entries\t",rebuilt_cmp.entries)
+              println(io,"rebuilt_nonzero\t",rebuilt_cmp.nonzero)
+              println(io,"rebuilt_maxdiff\t",rebuilt_cmp.maxdiff)
+              println(io,"rebuilt_exact\t",rebuilt_cmp.nonzero==0)
+              println(io,"same_vs_rebuilt_entries\t",same_vs_rebuilt.entries)
+              println(io,"same_vs_rebuilt_nonzero\t",same_vs_rebuilt.nonzero)
+              println(io,"same_vs_rebuilt_maxdiff\t",same_vs_rebuilt.maxdiff)
+              println(io,"bad_roundtrip_key\t",repr(bad_key))
+              println(io,"bad_roundtrip_delta\t",bad_delta)
+              println(io,"bad_roundtrip_nonzero\t",bad_roundtrip_cmp.nonzero)
+              for f in fields
+                  ds=abs(BigFloat(getproperty(direct_measurements[3],f))-BigFloat(getproperty(same_measurements[1],f)))
+                  dr=abs(BigFloat(getproperty(direct_measurements[3],f))-BigFloat(getproperty(rebuilt_measurements[1],f)))
+                  println(io,"same_measurement_diff_",f,"\t",ds)
+                  println(io,"rebuilt_measurement_diff_",f,"\t",dr)
+              end
+          end
+          open("results/result.json","w") do io
+              print(io,"{\n")
+              print(io,"  \"zero_roundtrip_exact\": ",zero_same_cmp.nonzero==0 ? "true" : "false",",\n")
+              print(io,"  \"same_compiled_exact\": ",same_cmp.nonzero==0 ? "true" : "false",",\n")
+              print(io,"  \"rebuilt_exact\": ",rebuilt_cmp.nonzero==0 ? "true" : "false",",\n")
+              print(io,"  \"same_vs_rebuilt_exact\": ",same_vs_rebuilt.nonzero==0 ? "true" : "false","\n")
+              print(io,"}\n")
+          end
+          println("SAME_COMPILED_SDP_COLLISION_COMPLETE")
+          JULIA
+          grep -q SAME_COMPILED_SDP_COLLISION_COMPLETE results/solve.log
+          sha256sum results/* > results/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kissing5-same-compiled-sdp
+          path: results/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 9
