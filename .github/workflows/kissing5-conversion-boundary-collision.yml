@@ -100,7 +100,7 @@ jobs:
                   end
                   xd=max(xd,delta)
               end
-              @assert Set(keys(p1.freevars)) == Set(keys(p2.freevars)
+              @assert Set(keys(p1.freevars)) == Set(keys(p2.freevars))
               fe=fn=0; fd=BigFloat(0); ff=nothing
               for key in sort!(collect(keys(p1.freevars)),by=string)
                   delta=abs(BigFloat(p1.freevars[key])-BigFloat(p2.freevars[key])); fe+=1
