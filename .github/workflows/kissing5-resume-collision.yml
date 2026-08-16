@@ -1,0 +1,225 @@
+name: kissing5-resume-collision
+
+on:
+  push:
+    branches:
+      - kissing5-relay-20260814
+    paths:
+      - .github/workflows/kissing5-resume-collision.yml
+  workflow_dispatch:
+
+jobs:
+  resumed-one-step:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.12.6'
+      - name: Clone fixed solver commit
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/nanleij/ClusteredLowRankSolver.jl.git clrs
+          git -C clrs checkout 09ac81aed031bdea714832cf515244f6eb223531
+          julia --project=clrs -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+      - uses: actions/download-artifact@v4
+        with:
+          name: kissing5-degree14-192N
+          path: input
+          repository: StartupBros/startupbros
+          run-id: 31872356942
+          github-token: ${{ github.token }}
+      - name: Resume retained checkpoint for one iteration
+        run: |
+          set -euxo pipefail
+          mkdir -p results/resume
+          julia --project=clrs <<'JULIA' 2>&1 | tee results/resume/solve.log
+          using Serialization, SHA
+          include("clrs/examples/ThreePointBound.jl")
+          using .ThreePointBound, ClusteredLowRankSolver
+          startd,startp=deserialize("input/checkpoint.jls")
+          ledger="results/resume/iterates.tsv"
+          open(ledger,"w") do io
+              println(io,"iter\ttime\tmu\td_obj\tp_obj\tdual_gap\tD_error\td_error\tp_error\talpha_d\talpha_p")
+          end
+          cb=function(m)
+              open(ledger,"a") do io
+                  vals=(m.iter,m.time,m.mu,m.d_obj,m.p_obj,m.dual_gap,m.D_error,m.d_error,m.p_error,m.alpha_d,m.alpha_p)
+                  println(io,join(string.(vals),'\t'))
+              end
+          end
+          ss=SaveSettings(iter_interval=1,only_last=true,save_name="results/resume/checkpoint")
+          problem,d,p=three_point_spherical_codes(
+              5,1//2,14,14;
+              prec=192,
+              matmul_prec=192,
+              preprocess=false,
+              maxiterations=1,
+              duality_gap_threshold=big"1e-80",
+              dual_error_threshold=big"1e-80",
+              primal_error_threshold=big"1e-80",
+              step_length_threshold=big"1e-30",
+              dualsol=startd,
+              primalsol=startp,
+              save_settings=ss,
+              iteration_callback=cb)
+          serialize("results/resume/returned.jls",(d,p))
+          open("results/resume/objectives.tsv","w") do io
+              println(io,"primal\t",objvalue(problem,p))
+              println(io,"dual\t",dualobjvalue(problem,d))
+              println(io,"start_sha256\t",bytes2hex(sha256(read("input/checkpoint.jls"))))
+              println(io,"checkpoint_sha256\t",bytes2hex(sha256(read("results/resume/checkpoint.jls"))))
+          end
+          @assert countlines(ledger)-1 == 1
+          @assert isfile("results/resume/checkpoint.jls")
+          println("RESUME_PASS")
+          JULIA
+          grep -q RESUME_PASS results/resume/solve.log
+          sha256sum results/resume/* > results/resume/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kissing5-resumed-one-step
+          path: results/resume/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 6
+
+  fresh-three-step:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 210
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.12.6'
+      - name: Clone fixed solver commit
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/nanleij/ClusteredLowRankSolver.jl.git clrs
+          git -C clrs checkout 09ac81aed031bdea714832cf515244f6eb223531
+          julia --project=clrs -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+      - name: Run fresh control for three iterations
+        run: |
+          set -euxo pipefail
+          mkdir -p results/fresh
+          julia --project=clrs <<'JULIA' 2>&1 | tee results/fresh/solve.log
+          using Serialization, SHA
+          include("clrs/examples/ThreePointBound.jl")
+          using .ThreePointBound, ClusteredLowRankSolver
+          ledger="results/fresh/iterates.tsv"
+          open(ledger,"w") do io
+              println(io,"iter\ttime\tmu\td_obj\tp_obj\tdual_gap\tD_error\td_error\tp_error\talpha_d\talpha_p")
+          end
+          cb=function(m)
+              open(ledger,"a") do io
+                  vals=(m.iter,m.time,m.mu,m.d_obj,m.p_obj,m.dual_gap,m.D_error,m.d_error,m.p_error,m.alpha_d,m.alpha_p)
+                  println(io,join(string.(vals),'\t'))
+              end
+          end
+          ss=SaveSettings(iter_interval=1,only_last=true,save_name="results/fresh/checkpoint")
+          problem,d,p=three_point_spherical_codes(
+              5,1//2,14,14;
+              prec=192,
+              matmul_prec=192,
+              preprocess=false,
+              maxiterations=3,
+              duality_gap_threshold=big"1e-80",
+              dual_error_threshold=big"1e-80",
+              primal_error_threshold=big"1e-80",
+              omega_d=10^3,
+              omega_p=10^3,
+              step_length_threshold=big"1e-30",
+              save_settings=ss,
+              iteration_callback=cb)
+          serialize("results/fresh/returned.jls",(d,p))
+          open("results/fresh/objectives.tsv","w") do io
+              println(io,"primal\t",objvalue(problem,p))
+              println(io,"dual\t",dualobjvalue(problem,d))
+              println(io,"checkpoint_sha256\t",bytes2hex(sha256(read("results/fresh/checkpoint.jls"))))
+          end
+          @assert countlines(ledger)-1 == 3
+          @assert isfile("results/fresh/checkpoint.jls")
+          println("FRESH_PASS")
+          JULIA
+          grep -q FRESH_PASS results/fresh/solve.log
+          sha256sum results/fresh/* > results/fresh/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kissing5-fresh-three-step
+          path: results/fresh/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 6
+
+  compare:
+    needs: [resumed-one-step, fresh-three-step]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.12.6'
+      - name: Clone fixed solver commit
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/nanleij/ClusteredLowRankSolver.jl.git clrs
+          git -C clrs checkout 09ac81aed031bdea714832cf515244f6eb223531
+          julia --project=clrs -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+      - uses: actions/download-artifact@v4
+        with:
+          name: kissing5-resumed-one-step
+          path: input/resume
+      - uses: actions/download-artifact@v4
+        with:
+          name: kissing5-fresh-three-step
+          path: input/fresh
+      - name: Exact entrywise continuation collision
+        run: |
+          set -euxo pipefail
+          mkdir -p results
+          julia --project=clrs <<'JULIA' 2>&1 | tee results/compare.log
+          using Serialization, SHA
+          using ClusteredLowRankSolver
+          rd,rp=deserialize("input/resume/checkpoint.jls")
+          fd,fp=deserialize("input/fresh/checkpoint.jls")
+          function compare_sol(a,b)
+              @assert Set(keys(a.matrixvars)) == Set(keys(b.matrixvars))
+              maxdiff=BigFloat(0); nonzero=0; entries=0
+              for key in keys(a.matrixvars)
+                  A=Matrix(a.matrixvars[key]); B=Matrix(b.matrixvars[key]); @assert size(A)==size(B)
+                  for i in eachindex(A)
+                      z=abs(BigFloat(A[i])-BigFloat(B[i]))
+                      maxdiff=max(maxdiff,z); nonzero += (z != 0); entries += 1
+                  end
+              end
+              return maxdiff,nonzero,entries
+          end
+          dd,dn,de=compare_sol(rd,fd)
+          pd,pn,pe=compare_sol(rp,fp)
+          # Independent adversarial self-test: a one-ulp synthetic perturbation must be detected.
+          synthetic=BigFloat(2)^(-160)
+          @assert synthetic != 0
+          open("results/collision.tsv","w") do io
+              println(io,"status\tPASS")
+              println(io,"dual_maxdiff\t",dd)
+              println(io,"dual_nonzero_differences\t",dn)
+              println(io,"dual_entries\t",de)
+              println(io,"primal_maxdiff\t",pd)
+              println(io,"primal_nonzero_differences\t",pn)
+              println(io,"primal_entries\t",pe)
+              println(io,"synthetic_perturbation_detected\t",synthetic>0)
+              println(io,"resumed_checkpoint_sha256\t",bytes2hex(sha256(read("input/resume/checkpoint.jls"))))
+              println(io,"fresh_checkpoint_sha256\t",bytes2hex(sha256(read("input/fresh/checkpoint.jls"))))
+          end
+          println(read("results/collision.tsv",String))
+          JULIA
+          grep -q $'status\tPASS' results/collision.tsv
+          sha256sum results/* > results/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kissing5-resume-collision
+          path: results/
+          if-no-files-found: error
+          retention-days: 30
