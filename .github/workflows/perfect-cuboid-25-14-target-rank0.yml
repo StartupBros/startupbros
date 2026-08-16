@@ -1,0 +1,49 @@
+name: perfect-cuboid-25-14-target-rank0
+
+on:
+  push:
+    paths:
+      - '.github/workflows/perfect-cuboid-25-14-target-rank0.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install exact arithmetic tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pari-gp pari-elldata eclib-tools
+      - name: Exact descent and independent analytic data
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          MODEL='0,-18752410,0,11358281742025,0'
+          echo "[$MODEL]" | mwrank -v 1 -p 1000 > results/mwrank.txt 2>&1 || true
+          cat results/mwrank.txt
+          cat > /tmp/check.gp <<'GP'
+          E=ellinit([0,-18752410,0,11358281742025,0]);
+          print("GLOBALRED=",ellglobalred(E));
+          print("ROOTNO=",ellrootno(E));
+          print("ANALYTIC=",ellanalyticrank(E));
+          print("RANK=",ellrank(E,1));
+          print("TORSION=",elltors(E));
+          quit;
+          GP
+          GP_COLORS='' gp -q -s 1000000000 /tmp/check.gp > results/pari.txt 2>&1
+          cat results/pari.txt
+          grep -q '^ROOTNO=1$' results/pari.txt
+          grep -q '^RANK=\[0, 0,' results/pari.txt
+          grep -q '^TORSION=\[2, \[2\]' results/pari.txt
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perfect-cuboid-25-14-target-rank0
+          path: results/
+          if-no-files-found: error
