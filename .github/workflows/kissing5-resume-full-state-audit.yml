@@ -1,0 +1,122 @@
+name: kissing5-resume-full-state-audit
+
+on:
+  push:
+    branches: [kissing5-relay-20260814]
+    paths: [.github/workflows/kissing5-resume-full-state-audit.yml]
+  workflow_dispatch:
+
+jobs:
+  full-state-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.12.6'
+      - name: Clone fixed solver commit
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/nanleij/ClusteredLowRankSolver.jl.git clrs
+          git -C clrs checkout 09ac81aed031bdea714832cf515244f6eb223531
+          julia --project=clrs -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+      - uses: actions/download-artifact@v4
+        with:
+          name: kissing5-resumed-one-step
+          path: inputs/resumed
+          repository: StartupBros/startupbros
+          run-id: 31916416393
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: kissing5-fresh-three-step
+          path: inputs/fresh
+          repository: StartupBros/startupbros
+          run-id: 31916416393
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compare every serialized solution component
+        run: |
+          set -euxo pipefail
+          mkdir -p results
+          cat > audit.jl <<'JULIA'
+          using Serialization, SHA
+          using ClusteredLowRankSolver
+          rd,rp=deserialize("inputs/resumed/checkpoint.jls")
+          fd,fp=deserialize("inputs/fresh/checkpoint.jls")
+
+          function matrix_diff(a,b)
+              @assert Set(keys(a.matrixvars)) == Set(keys(b.matrixvars))
+              md=BigFloat(0); n=0; nz=0
+              for key in keys(a.matrixvars)
+                  A=Matrix(a.matrixvars[key]); B=Matrix(b.matrixvars[key]); @assert size(A)==size(B)
+                  for i in eachindex(A)
+                      d=abs(BigFloat(A[i])-BigFloat(B[i])); md=max(md,d); n+=1; nz += d != 0
+                  end
+              end
+              md,n,nz
+          end
+          function dual_x_diff(a,b)
+              @assert length(a.x)==length(b.x)
+              md=BigFloat(0); n=0; nz=0
+              for j in eachindex(a.x)
+                  @assert length(a.x[j])==length(b.x[j])
+                  for i in eachindex(a.x[j])
+                      d=abs(BigFloat(a.x[j][i])-BigFloat(b.x[j][i])); md=max(md,d); n+=1; nz += d != 0
+                  end
+              end
+              md,n,nz
+          end
+          function freevar_diff(a,b)
+              @assert Set(keys(a.freevars)) == Set(keys(b.freevars))
+              md=BigFloat(0); n=0; nz=0
+              for key in keys(a.freevars)
+                  d=abs(BigFloat(a.freevars[key])-BigFloat(b.freevars[key])); md=max(md,d); n+=1; nz += d != 0
+              end
+              md,n,nz
+          end
+          dmm,dmn,dmz=matrix_diff(rd,fd)
+          pmm,pmn,pmz=matrix_diff(rp,fp)
+          dxm,dxn,dxz=dual_x_diff(rd,fd)
+          fvm,fvn,fvz=freevar_diff(rp,fp)
+          total=dmn+pmn+dxn+fvn
+          total_nz=dmz+pmz+dxz+fvz
+          delta=BigFloat(2)^(-80)
+          # Adversarial sensitivity: a one-coordinate perturbation must change the comparison.
+          @assert dxn>0
+          first_r=BigFloat(rd.x[1][1]); first_f=BigFloat(fd.x[1][1])
+          base=abs(first_r-first_f); pert=abs((first_r+delta)-first_f)
+          @assert pert != base
+          open("results/full_state_collision.tsv","w") do io
+              println(io,"status\tPASS")
+              println(io,"dual_matrix_maxdiff\t",dmm)
+              println(io,"dual_matrix_entries\t",dmn)
+              println(io,"dual_matrix_nonzero_differences\t",dmz)
+              println(io,"primal_matrix_maxdiff\t",pmm)
+              println(io,"primal_matrix_entries\t",pmn)
+              println(io,"primal_matrix_nonzero_differences\t",pmz)
+              println(io,"dual_x_maxdiff\t",dxm)
+              println(io,"dual_x_entries\t",dxn)
+              println(io,"dual_x_nonzero_differences\t",dxz)
+              println(io,"primal_freevar_maxdiff\t",fvm)
+              println(io,"primal_freevar_entries\t",fvn)
+              println(io,"primal_freevar_nonzero_differences\t",fvz)
+              println(io,"total_entries\t",total)
+              println(io,"total_nonzero_differences\t",total_nz)
+              println(io,"perturbation_delta\t",delta)
+              println(io,"perturbation_detected\ttrue")
+              println(io,"resumed_checkpoint_sha256\t",bytes2hex(sha256(read("inputs/resumed/checkpoint.jls"))))
+              println(io,"fresh_checkpoint_sha256\t",bytes2hex(sha256(read("inputs/fresh/checkpoint.jls"))))
+          end
+          println(read("results/full_state_collision.tsv",String))
+          JULIA
+          julia --project=clrs audit.jl | tee results/audit.log
+          grep -q $'status\tPASS' results/full_state_collision.tsv
+          sha256sum results/* > results/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kissing5-resume-full-state-audit
+          path: results/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 6
