@@ -1,0 +1,1668 @@
+{
+  "status": "PASS",
+  "solver_commit": "09ac81aed031bdea714832cf515244f6eb223531",
+  "method_introspection": "SOLVESDP_METHODS\nsolvesdp(problem::Problem; prec, kwargs...) @ ClusteredLowRankSolver ~/work/startupbros/startupbros/clrs/src/solver.jl:153\nKWARGS=[:prec, Symbol(\"kwargs...\")]\nsolvesdp(sdp::ClusteredLowRankSDP; ...) @ ClusteredLowRankSolver ~/work/startupbros/startupbros/clrs/src/solver.jl:183\nKWARGS=[:...]\nsolvesdp(sdp::ClusteredLowRankSDP, threadinginfo::ClusteredLowRankSolver.ThreadingInfo; prec, maxiterations, beta_infeasible, beta_feasible, gamma, omega_p, omega_d, duality_gap_threshold, dual_error_threshold, primal_error_threshold, max_complementary_gap, need_dual_feasible, need_primal_feasible, verbose, step_length_threshold, dualsol, primalsol, safe_step, correctoronly, save_settings, preprocess, iteration_callback, solution_callback, matmul_prec, testing) @ ClusteredLowRankSolver ~/work/startupbros/startupbros/clrs/src/solver.jl:183\nKWARGS=[:prec, :maxiterations, :beta_infeasible, :beta_feasible, :gamma, :omega_p, :omega_d, :duality_gap_threshold, :dual_error_threshold, :primal_error_threshold, :max_complementary_gap, :need_dual_feasible, :need_primal_feasible, :verbose, :step_length_threshold, :dualsol, :primalsol, :safe_step, :correctoronly, :save_settings, :preprocess, :iteration_callback, :solution_callback, :matmul_prec, :testing]\n",
+  "public_restart_terms": [
+    "dualsol",
+    "primalsol"
+  ],
+  "source_restart_terms": [
+    "warm",
+    "restart",
+    "dualstart",
+    "primalstart",
+    "dualsol",
+    "primalsol",
+    "x0"
+  ],
+  "direct_checkpoint_resume_api_detected": true,
+  "source_hits": {
+    "warm": [
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 174,
+        "excerpt": "    @testset \"Warmstart\" begin"
+      }
+    ],
+    "resume": [],
+    "restart": [
+      {
+        "file": "src/solver.jl",
+        "line": 1402,
+        "excerpt": "            throw(SolverFailure(\"Q was not decomposed correctly. Try restarting with a higher precision. If this occurred in the first iteration, remove linear dependencies between free variables or turn preprocessing on.\"))"
+      }
+    ],
+    "initial_solution": [],
+    "initialsolution": [],
+    "initial_dual": [],
+    "initial_primal": [],
+    "dual_start": [],
+    "primal_start": [],
+    "dualstart": [
+      {
+        "file": "ext/MOIExt.jl",
+        "line": 507,
+        "excerpt": "# VariableDualStart"
+      }
+    ],
+    "primalstart": [
+      {
+        "file": "ext/MOIExt.jl",
+        "line": 508,
+        "excerpt": "# VariablePrimalStart"
+      }
+    ],
+    "dualsol": [
+      {
+        "file": "examples/SpherePacking.jl",
+        "line": 113,
+        "excerpt": "    status, dualsol, primalsol, time, errorcode = solvesdp(problem; prec=prec, kwargs...)"
+      },
+      {
+        "file": "examples/SpherePacking.jl",
+        "line": 114,
+        "excerpt": "    return problem, dualsol, primalsol"
+      },
+      {
+        "file": "examples/SpherePacking.jl",
+        "line": 183,
+        "excerpt": "    status, dualsol, primalsol, time, errorcode = solvesdp(problem; prec=prec, kwargs...)"
+      },
+      {
+        "file": "examples/SpherePacking.jl",
+        "line": 184,
+        "excerpt": "    return problem, dualsol, primalsol"
+      },
+      {
+        "file": "examples/PolyOpt.jl",
+        "line": 28,
+        "excerpt": "    status, dualsol, primalsol, time, errorcode = solvesdp(sdp)    "
+      },
+      {
+        "file": "examples/PolyOpt.jl",
+        "line": 85,
+        "excerpt": "    status, dualsol, primalsol, time, errorcode = solvesdp(problem)"
+      },
+      {
+        "file": "examples/PolyOpt.jl",
+        "line": 86,
+        "excerpt": "    return problem, dualsol, primalsol"
+      },
+      {
+        "file": "examples/Delsarte.jl",
+        "line": 47,
+        "excerpt": "    status, dualsol, primalsol, time, errorcode = solvesdp(problem)"
+      },
+      {
+        "file": "examples/ThreePointBound.jl",
+        "line": 167,
+        "excerpt": "    status, dualsol, primalsol, time, errorcode = solvesdp(problem; kwargs...)"
+      },
+      {
+        "file": "examples/ThreePointBound.jl",
+        "line": 168,
+        "excerpt": "    return problem, dualsol, primalsol "
+      },
+      {
+        "file": "examples/DelsarteExact.jl",
+        "line": 32,
+        "excerpt": "    status, dualsol, primalsol, time, errorcode = solvesdp(problem_bigfloat; duality_gap_threshold=eps, kwargs...)"
+      },
+      {
+        "file": "examples/DelsarteExact.jl",
+        "line": 34,
+        "excerpt": "    return objvalue(problem, primalsol), problem, dualsol, primalsol"
+      },
+      {
+        "file": "examples/DelsarteExact.jl",
+        "line": 38,
+        "excerpt": "    obj, problem, dualsol, primalsol = delsarte_exact(n, d, costheta; eps=eps, prec=prec)"
+      },
+      {
+        "file": "examples/DelsarteExact.jl",
+        "line": 42,
+        "excerpt": "    success, exactprimalsol = exact_solution(problem, dualsol, primalsol, monomial_bases=[b], settings=settings)"
+      },
+      {
+        "file": "ext/JuMPExt.jl",
+        "line": 51,
+        "excerpt": "        success, esol, transformations = exact_solution(problem, opt.result_data[:dualsol], opt.result_data[:primalsol]; FF, g, settings, transformed, verbose)"
+      },
+      {
+        "file": "ext/JuMPExt.jl",
+        "line": 60,
+        "excerpt": "        success, esol = exact_solution(problem, opt.result_data[:dualsol], opt.result_data[:primalsol]; FF, g, settings, transformed, verbose)"
+      },
+      {
+        "file": "ext/JuMPExt.jl",
+        "line": 87,
+        "excerpt": "function change_varkeys(c::Union{PrimalSolution{T}, DualSolution{T}},  idx_to_var_psd, idx_to_var_free) where T"
+      },
+      {
+        "file": "ext/JuMPExt.jl",
+        "line": 93,
+        "excerpt": "        return DualSolution{T}(c.base_ring, c.x, dct_mats)"
+      },
+      {
+        "file": "ext/JuMPExt.jl",
+        "line": 100,
+        "excerpt": "    find_field(opt.result_data[:dualsol], opt.result_data[:primalsol], max_degree; valbound, errbound, bits, max_coeff)"
+      },
+      {
+        "file": "ext/MOIExt.jl",
+        "line": 400,
+        "excerpt": "    status, dualsol, primalsol, t, e = solvesdp(opt.problem; opt.options...)"
+      },
+      {
+        "file": "ext/MOIExt.jl",
+        "line": 404,
+        "excerpt": "    opt.result_data[:dualsol] = dualsol"
+      },
+      {
+        "file": "ext/MOIExt.jl",
+        "line": 404,
+        "excerpt": "    opt.result_data[:dualsol] = dualsol"
+      },
+      {
+        "file": "ext/MOIExt.jl",
+        "line": 409,
+        "excerpt": "    opt.result_data[MOI.DualObjectiveValue()] = dualobjvalue(pr, dualsol)"
+      },
+      {
+        "file": "ext/MOIExt.jl",
+        "line": 535,
+        "excerpt": "    return -opt.result_data[:dualsol].x[ci.value][1]"
+      },
+      {
+        "file": "ext/MOIExt.jl",
+        "line": 541,
+        "excerpt": "    return [opt.result_data[:dualsol].matrixvars[blk_start+i][1,1] for i=0:numvars-1]"
+      },
+      {
+        "file": "ext/MOIExt.jl",
+        "line": 548,
+        "excerpt": "    return [opt.result_data[:dualsol].matrixvars[blk][i,j] for i=1:blkdim for j=1:i]"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1153,
+        "excerpt": "    DualSolution{T}"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1160,
+        "excerpt": "struct DualSolution{T}"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1217,
+        "excerpt": "    dualobjvalue(problem::Problem, sol::DualSolution)"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1221,
+        "excerpt": "function dualobjvalue(problem::Problem, sol::DualSolution{T}) where T"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1231,
+        "excerpt": "#Q: Do we want abstract struct Solution, with subtypes PrimalSolution and DualSolution?"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1234,
+        "excerpt": "    dualsol::DualSolution{T}"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1234,
+        "excerpt": "    dualsol::DualSolution{T}"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1243,
+        "excerpt": "function matrixvar(sol::T, name) where T <: Union{PrimalSolution, DualSolution}"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1252,
+        "excerpt": "function matrixvars(sol::T) where T <: Union{PrimalSolution, DualSolution}"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1329,
+        "excerpt": "    vectorize(sol::DualSolution)"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1334,
+        "excerpt": "function vectorize(sol::DualSolution{T}) where T"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 743,
+        "excerpt": "    basis_transformations(dualsol, primalsol; FF=QQ, g=1, settings=RoundingSettings())"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 750,
+        "excerpt": "function basis_transformations(dualsol::DualSolution, sol::PrimalSolution; FF=QQ, g=1, settings::RoundingSettings=RoundingSettings(),verbose=true)"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 750,
+        "excerpt": "function basis_transformations(dualsol::DualSolution, sol::PrimalSolution; FF=QQ, g=1, settings::RoundingSettings=RoundingSettings(),verbose=true)"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 754,
+        "excerpt": "        dm = matrixvar(dualsol, k)"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 1361,
+        "excerpt": "    exact_solution(problem::Problem, dualsol::DualSolution, primalsol::PrimalSolution; transformed=false, FF = QQ, g=1, settings::RoundingSettings=RoundingSettings(), monomial_bases=nothing)"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 1361,
+        "excerpt": "    exact_solution(problem::Problem, dualsol::DualSolution, primalsol::PrimalSolution; transformed=false, FF = QQ, g=1, settings::RoundingSettings=RoundingSettings(), monomial_bases=nothing)"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 1366,
+        "excerpt": "function exact_solution(problem::Problem, dualsol::DualSolution, primalsol::PrimalSolution; "
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 1366,
+        "excerpt": "function exact_solution(problem::Problem, dualsol::DualSolution, primalsol::PrimalSolution; "
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 1374,
+        "excerpt": "    t = @elapsed Bs = basis_transformations(dualsol, primalsol, FF=FF, g=g, settings=settings, verbose=verbose)"
+      },
+      {
+        "file": "src/pre_postprocessing.jl",
+        "line": 251,
+        "excerpt": "function add_constraintdual(x, dualsol_mats, cs,(systemmat, b), dualobj, objsense; T=BigFloat) "
+      },
+      {
+        "file": "src/pre_postprocessing.jl",
+        "line": 259,
+        "excerpt": "        Yvec = vectorize(dualsol_mats)"
+      },
+      {
+        "file": "src/ClusteredLowRankSolver.jl",
+        "line": 40,
+        "excerpt": "export DualSolution, PrimalSolution, matrixvar, freevar, slacks, matrixvars, freevars"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 51,
+        "excerpt": "- dualsol"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 88,
+        "excerpt": "    dualsol"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 96,
+        "excerpt": "    function SolverResult(status, dualsol, primalsol, solvetime, errorcode, primalobj, dualobj)"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 97,
+        "excerpt": "        data = (status, dualsol, primalsol, solvetime, errorcode, primalobj, dualobj)"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 140,
+        "excerpt": "  - `dualsol` (default: `nothing`): start from the solution `(dualsol, primalsol)` if both `dualsol` and `primalsol` are given"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 140,
+        "excerpt": "  - `dualsol` (default: `nothing`): start from the solution `(dualsol, primalsol)` if both `dualsol` and `primalsol` are given"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 140,
+        "excerpt": "  - `dualsol` (default: `nothing`): start from the solution `(dualsol, primalsol)` if both `dualsol` and `primalsol` are given"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 141,
+        "excerpt": "  - `primalsol` (default: `nothing`): start from the solution `(dualsol, primalsol)` if both `dualsol` and `primalsol` are given"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 141,
+        "excerpt": "  - `primalsol` (default: `nothing`): start from the solution `(dualsol, primalsol)` if both `dualsol` and `primalsol` are given"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 148,
+        "excerpt": "    signature `f(measurements, dualsol, primalsol)`, which is called at each iteration with the current"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 171,
+        "excerpt": "    # dualsol::Union{Nothing,DualSolution}=nothing,"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 171,
+        "excerpt": "    # dualsol::Union{Nothing,DualSolution}=nothing,"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 201,
+        "excerpt": "    dualsol::Union{Nothing,DualSolution}=nothing,"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 201,
+        "excerpt": "    dualsol::Union{Nothing,DualSolution}=nothing,"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 295,
+        "excerpt": "    if !isnothing(dualsol) && !isnothing(primalsol)"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 302,
+        "excerpt": "                x[idx] = dualsol.x[j][l]"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 316,
+        "excerpt": "                    if !isnothing(dualsol)"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 317,
+        "excerpt": "                        X.blocks[j].blocks[k][hs, vs] = dualsol.matrixvars[bl]"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 613,
+        "excerpt": "                dualsol, primalsol = solution_to_bigfloat(X, xbf, Y, ybf, sdp)"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 615,
+        "excerpt": "                dualsol, primalsol = solution_to_bigfloat(X, x, Y, y, sdp)"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 625,
+        "excerpt": "            serialize(save_name, (dualsol, primalsol))"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 650,
+        "excerpt": "            solution_callback(measurements, dualsol, primalsol)"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 750,
+        "excerpt": "    dualsol, primalsol = solution_to_bigfloat(X, x, Y, y, sdp)"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 760,
+        "excerpt": "        serialize(save_name, (dualsol, primalsol))"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 861,
+        "excerpt": "        dualsol,"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 913,
+        "excerpt": "\tdualsol = DualSolution{BigFloat}(BigFloat, x_orig, matrixvars_dual)"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 913,
+        "excerpt": "\tdualsol = DualSolution{BigFloat}(BigFloat, x_orig, matrixvars_dual)"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 914,
+        "excerpt": "    return dualsol, primalsol"
+      },
+      {
+        "file": "src/find_field.jl",
+        "line": 1,
+        "excerpt": "function select_vals(dualsol::DualSolution{T}, primalsol::PrimalSolution{T}, max_d=10; valbound=1e-15,errbound=1e-15, bits=100, max_coeff=1000, sizebound=10^6) where T"
+      },
+      {
+        "file": "src/find_field.jl",
+        "line": 1,
+        "excerpt": "function select_vals(dualsol::DualSolution{T}, primalsol::PrimalSolution{T}, max_d=10; valbound=1e-15,errbound=1e-15, bits=100, max_coeff=1000, sizebound=10^6) where T"
+      },
+      {
+        "file": "src/find_field.jl",
+        "line": 3,
+        "excerpt": "    for (k,m) in dualsol.matrixvars"
+      },
+      {
+        "file": "src/find_field.jl",
+        "line": 89,
+        "excerpt": "    find_field(dualsol, primalsol, max_degree=4; valbound=1e-15, errbound=1e-15, bits=100, max_coeff=1000)"
+      },
+      {
+        "file": "src/find_field.jl",
+        "line": 97,
+        "excerpt": "function find_field(dualsol::DualSolution{T}, primalsol::PrimalSolution{T}, max_degree=10; valbound=1e-15,errbound=1e-15, bits=max_degree*100, max_coeff=10^5) where T"
+      },
+      {
+        "file": "src/find_field.jl",
+        "line": 97,
+        "excerpt": "function find_field(dualsol::DualSolution{T}, primalsol::PrimalSolution{T}, max_degree=10; valbound=1e-15,errbound=1e-15, bits=max_degree*100, max_coeff=10^5) where T"
+      },
+      {
+        "file": "src/find_field.jl",
+        "line": 98,
+        "excerpt": "    vals = select_vals(dualsol, primalsol, max_degree;valbound=valbound, errbound=errbound, bits=bits, max_coeff=max_coeff)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 10,
+        "excerpt": "        problem, dualsol, primalsol = min_f(2)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 12,
+        "excerpt": "        @test dualobjvalue(problem, dualsol) \u2248 -2.113 atol=1e-2"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 20,
+        "excerpt": "        problem, dualsol, primalsol = cohnelkies(8, 15, prec=256)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 22,
+        "excerpt": "        @test dualobjvalue(problem, dualsol) \u2248 BigFloat(pi)^4/384 atol=1e-4"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 23,
+        "excerpt": "        problem, dualsol, primalsol = Nsphere_packing(8, 15, [1//2,1//2],2, prec=300)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 25,
+        "excerpt": "        @test dualobjvalue(problem, dualsol) \u2248 BigFloat(pi)^4/384 atol=1e-4"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 29,
+        "excerpt": "        problem, dualsol, primalsol = three_point_spherical_codes(4, 1//6, -1, 4, prec=256, omega_d=10^3, omega_p=10^3)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 31,
+        "excerpt": "        @test dualobjvalue(problem, dualsol) \u2248 10 atol=1e-5"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 65,
+        "excerpt": "        _,dualsol,primalsol,_ = solvesdp(problem, save_settings=SaveSettings(iter_interval=1, save_name=\"test\"))"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 67,
+        "excerpt": "        _,dualsol,primalsol,_ = solvesdp(problem, save_settings=SaveSettings(time_interval=1, save_name=\"test#\", only_last=false))"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 69,
+        "excerpt": "        _,dualsol,primalsol,_ = solvesdp(problem, save_settings=SaveSettings(iter_interval=1, save_name=\"testiter#\", only_last=false))"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 98,
+        "excerpt": "            problem, dualsol, primalsol = three_point_spherical_codes(4, 1//6, -1, 4,prec=256, duality_gap_threshold=1e-30, omega_d = 10^3, omega_p=10^3)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 99,
+        "excerpt": "            success, exactprimalsol = exact_solution(problem, dualsol, primalsol)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 106,
+        "excerpt": "        obj, problem, dualsol, primalsol = delsarte_exact(4, 9, 1/(z-1); FF=N, g = gapprox)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 108,
+        "excerpt": "            N2, gapprox2 = find_field(dualsol,primalsol)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 116,
+        "excerpt": "            success, exactprimalsol = exact_solution(problem, dualsol, primalsol; FF=N, g=gapprox)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 123,
+        "excerpt": "            obj, problem1, dualsol1, primalsol1 = delsarte_exact(n1, d1, costheta1; prec=512)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 133,
+        "excerpt": "            obj2, problem2, dualsol2, primalsol2 = delsarte_exact(n2, d2, costheta2; FF=N, g = gapprox)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 146,
+        "excerpt": "                    problem, dualsol, primalsol, b, FF, g, val = problem1, dualsol1, primalsol1, b1, QQ, BigFloat(1), val1"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 146,
+        "excerpt": "                    problem, dualsol, primalsol, b, FF, g, val = problem1, dualsol1, primalsol1, b1, QQ, BigFloat(1), val1"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 148,
+        "excerpt": "                    problem, dualsol, primalsol, b, FF, g, val = problem2, dualsol2, primalsol2, b2, N, gapprox, val2"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 148,
+        "excerpt": "                    problem, dualsol, primalsol, b, FF, g, val = problem2, dualsol2, primalsol2, b2, N, gapprox, val2"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 162,
+        "excerpt": "                        success1, exactprimalsol = exact_solution(problem, dualsol, primalsol; FF=FF, g=g, monomial_bases=[b], settings=settings, verbose=false)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 163,
+        "excerpt": "                        success2, exactprimalsol = exact_solution(problem, dualsol, primalsol; FF=FF, g=g, settings=settings, verbose=false)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 178,
+        "excerpt": "        _,dualsol,primalsol,_ = solvesdp(problem, duality_gap_threshold=1e-5)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 179,
+        "excerpt": "        status, dualsol2, primalsol2, _ = solvesdp(problem; primalsol, dualsol, duality_gap_threshold=1e-10)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 179,
+        "excerpt": "        status, dualsol2, primalsol2, _ = solvesdp(problem; primalsol, dualsol, duality_gap_threshold=1e-10)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 335,
+        "excerpt": "        @test res.dualobj == dualobjvalue(problem, res.dualsol)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 344,
+        "excerpt": "        @test optimal(solvesdp(problem, solution_callback=(measurements, dualsol, primalsol)->(matrixvar(primalsol, :z)[1,1] isa BigFloat))[1])"
+      }
+    ],
+    "primalsol": [
+      {
+        "file": "examples/SpherePacking.jl",
+        "line": 113,
+        "excerpt": "    status, dualsol, primalsol, time, errorcode = solvesdp(problem; prec=prec, kwargs...)"
+      },
+      {
+        "file": "examples/SpherePacking.jl",
+        "line": 114,
+        "excerpt": "    return problem, dualsol, primalsol"
+      },
+      {
+        "file": "examples/SpherePacking.jl",
+        "line": 183,
+        "excerpt": "    status, dualsol, primalsol, time, errorcode = solvesdp(problem; prec=prec, kwargs...)"
+      },
+      {
+        "file": "examples/SpherePacking.jl",
+        "line": 184,
+        "excerpt": "    return problem, dualsol, primalsol"
+      },
+      {
+        "file": "examples/PolyOpt.jl",
+        "line": 28,
+        "excerpt": "    status, dualsol, primalsol, time, errorcode = solvesdp(sdp)    "
+      },
+      {
+        "file": "examples/PolyOpt.jl",
+        "line": 29,
+        "excerpt": "    return objvalue(problem, primalsol), freevar(primalsol, :lambda), primalsol"
+      },
+      {
+        "file": "examples/PolyOpt.jl",
+        "line": 29,
+        "excerpt": "    return objvalue(problem, primalsol), freevar(primalsol, :lambda), primalsol"
+      },
+      {
+        "file": "examples/PolyOpt.jl",
+        "line": 29,
+        "excerpt": "    return objvalue(problem, primalsol), freevar(primalsol, :lambda), primalsol"
+      },
+      {
+        "file": "examples/PolyOpt.jl",
+        "line": 85,
+        "excerpt": "    status, dualsol, primalsol, time, errorcode = solvesdp(problem)"
+      },
+      {
+        "file": "examples/PolyOpt.jl",
+        "line": 86,
+        "excerpt": "    return problem, dualsol, primalsol"
+      },
+      {
+        "file": "examples/Delsarte.jl",
+        "line": 47,
+        "excerpt": "    status, dualsol, primalsol, time, errorcode = solvesdp(problem)"
+      },
+      {
+        "file": "examples/Delsarte.jl",
+        "line": 48,
+        "excerpt": "    return objvalue(problem, primalsol)"
+      },
+      {
+        "file": "examples/ThreePointBound.jl",
+        "line": 167,
+        "excerpt": "    status, dualsol, primalsol, time, errorcode = solvesdp(problem; kwargs...)"
+      },
+      {
+        "file": "examples/ThreePointBound.jl",
+        "line": 168,
+        "excerpt": "    return problem, dualsol, primalsol "
+      },
+      {
+        "file": "examples/DelsarteExact.jl",
+        "line": 32,
+        "excerpt": "    status, dualsol, primalsol, time, errorcode = solvesdp(problem_bigfloat; duality_gap_threshold=eps, kwargs...)"
+      },
+      {
+        "file": "examples/DelsarteExact.jl",
+        "line": 34,
+        "excerpt": "    return objvalue(problem, primalsol), problem, dualsol, primalsol"
+      },
+      {
+        "file": "examples/DelsarteExact.jl",
+        "line": 34,
+        "excerpt": "    return objvalue(problem, primalsol), problem, dualsol, primalsol"
+      },
+      {
+        "file": "examples/DelsarteExact.jl",
+        "line": 38,
+        "excerpt": "    obj, problem, dualsol, primalsol = delsarte_exact(n, d, costheta; eps=eps, prec=prec)"
+      },
+      {
+        "file": "examples/DelsarteExact.jl",
+        "line": 42,
+        "excerpt": "    success, exactprimalsol = exact_solution(problem, dualsol, primalsol, monomial_bases=[b], settings=settings)"
+      },
+      {
+        "file": "examples/DelsarteExact.jl",
+        "line": 42,
+        "excerpt": "    success, exactprimalsol = exact_solution(problem, dualsol, primalsol, monomial_bases=[b], settings=settings)"
+      },
+      {
+        "file": "examples/DelsarteExact.jl",
+        "line": 43,
+        "excerpt": "    return success, problem, exactprimalsol"
+      },
+      {
+        "file": "ext/JuMPExt.jl",
+        "line": 51,
+        "excerpt": "        success, esol, transformations = exact_solution(problem, opt.result_data[:dualsol], opt.result_data[:primalsol]; FF, g, settings, transformed, verbose)"
+      },
+      {
+        "file": "ext/JuMPExt.jl",
+        "line": 60,
+        "excerpt": "        success, esol = exact_solution(problem, opt.result_data[:dualsol], opt.result_data[:primalsol]; FF, g, settings, transformed, verbose)"
+      },
+      {
+        "file": "ext/JuMPExt.jl",
+        "line": 87,
+        "excerpt": "function change_varkeys(c::Union{PrimalSolution{T}, DualSolution{T}},  idx_to_var_psd, idx_to_var_free) where T"
+      },
+      {
+        "file": "ext/JuMPExt.jl",
+        "line": 89,
+        "excerpt": "    if c isa PrimalSolution"
+      },
+      {
+        "file": "ext/JuMPExt.jl",
+        "line": 91,
+        "excerpt": "        return PrimalSolution{T}(c.base_ring, dct_mats, dct_fv)"
+      },
+      {
+        "file": "ext/JuMPExt.jl",
+        "line": 100,
+        "excerpt": "    find_field(opt.result_data[:dualsol], opt.result_data[:primalsol], max_degree; valbound, errbound, bits, max_coeff)"
+      },
+      {
+        "file": "ext/MOIExt.jl",
+        "line": 400,
+        "excerpt": "    status, dualsol, primalsol, t, e = solvesdp(opt.problem; opt.options...)"
+      },
+      {
+        "file": "ext/MOIExt.jl",
+        "line": 403,
+        "excerpt": "    opt.result_data[:primalsol] = primalsol"
+      },
+      {
+        "file": "ext/MOIExt.jl",
+        "line": 403,
+        "excerpt": "    opt.result_data[:primalsol] = primalsol"
+      },
+      {
+        "file": "ext/MOIExt.jl",
+        "line": 408,
+        "excerpt": "    opt.result_data[MOI.ObjectiveValue()] = objvalue(pr, primalsol)"
+      },
+      {
+        "file": "ext/MOIExt.jl",
+        "line": 523,
+        "excerpt": "        return opt.result_data[:primalsol].matrixvars[blk][i,j]"
+      },
+      {
+        "file": "ext/MOIExt.jl",
+        "line": 526,
+        "excerpt": "        return opt.result_data[:primalsol].matrixvars[blk][1,1]"
+      },
+      {
+        "file": "ext/MOIExt.jl",
+        "line": 529,
+        "excerpt": "        return opt.result_data[:primalsol].freevars[idx]"
+      },
+      {
+        "file": "ext/MOIExt.jl",
+        "line": 554,
+        "excerpt": "    return [opt.result_data[:primalsol].matrixvars[blk+i][1,1] for i=0:numvars-1]"
+      },
+      {
+        "file": "ext/MOIExt.jl",
+        "line": 561,
+        "excerpt": "    return [opt.result_data[:primalsol].matrixvars[blk][i,j] for j=1:blkdim for i=1:j]"
+      },
+      {
+        "file": "ext/MOIExt.jl",
+        "line": 568,
+        "excerpt": "    return (sum(dot(con.matrixcoeff[k], opt.result_data[:primalsol].matrixvars[k]) for k in eachindex(con.matrixcoeff); init=T(0))"
+      },
+      {
+        "file": "ext/MOIExt.jl",
+        "line": 569,
+        "excerpt": "        + sum(con.freecoeff[k] * opt.result_data[:primalsol].freevars[k] for k in eachindex(con.freecoeff); init=T(0)))"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1167,
+        "excerpt": "    PrimalSolution{T}"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1174,
+        "excerpt": "struct PrimalSolution{T}"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1181,
+        "excerpt": "    objvalue(objective::Objective, sol::PrimalSolution)"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1183,
+        "excerpt": "function objvalue(objective::Objective, sol::PrimalSolution{T}) where T <: Number"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1194,
+        "excerpt": "function objvalue(objective::Objective, sol::PrimalSolution)"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1205,
+        "excerpt": "    objvalue(problem::Problem, sol::PrimalSolution)"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1209,
+        "excerpt": "function objvalue(problem::Problem, sol::PrimalSolution)"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1212,
+        "excerpt": "function objvalue(obj::Union{Minimize, Maximize}, sol::PrimalSolution)"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1231,
+        "excerpt": "#Q: Do we want abstract struct Solution, with subtypes PrimalSolution and DualSolution?"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1235,
+        "excerpt": "    primalsol::PrimalSolution{T}"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1235,
+        "excerpt": "    primalsol::PrimalSolution{T}"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1243,
+        "excerpt": "function matrixvar(sol::T, name) where T <: Union{PrimalSolution, DualSolution}"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1252,
+        "excerpt": "function matrixvars(sol::T) where T <: Union{PrimalSolution, DualSolution}"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1261,
+        "excerpt": "function freevar(sol::PrimalSolution, name)"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1269,
+        "excerpt": "function freevars(sol::PrimalSolution)"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1288,
+        "excerpt": "    slacks(problem, primalsol)"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1292,
+        "excerpt": "function slacks(problem::Problem, sol::PrimalSolution)"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1309,
+        "excerpt": "    vectorize(sol::PrimalSolution)"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1314,
+        "excerpt": "function vectorize(sol::PrimalSolution{T}) where T"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1350,
+        "excerpt": "function as_primal_solution(sol::PrimalSolution, x::Vector{T}) where T"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1370,
+        "excerpt": "    PrimalSolution{T}(parent(x[1]), matrixvars, freevars)"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1390,
+        "excerpt": "\tpartial_linearsystem(problem::Problem, sol::PrimalSolution, columns::Union{PrimalSolution, Vector{Int}})"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1390,
+        "excerpt": "\tpartial_linearsystem(problem::Problem, sol::PrimalSolution, columns::Union{PrimalSolution, Vector{Int}})"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1396,
+        "excerpt": "function partial_linearsystem(problem::Problem, sol::PrimalSolution, columns::Vector{Int}; FF=QQ, monomial_bases=nothing)"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1411,
+        "excerpt": "function partial_linearsystem(problem::Problem, sol::PrimalSolution, columns::PrimalSolution; FF=QQ, monomial_bases=nothing)"
+      },
+      {
+        "file": "src/interface.jl",
+        "line": 1411,
+        "excerpt": "function partial_linearsystem(problem::Problem, sol::PrimalSolution, columns::PrimalSolution; FF=QQ, monomial_bases=nothing)"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 95,
+        "excerpt": "function select_columns(problem::Problem, sol::PrimalSolution, redundancyfactor=6; verbose=true)"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 155,
+        "excerpt": "function project_to_affine_space(problem::Problem, sol::PrimalSolution; FF=QQ, g=1, settings::RoundingSettings=RoundingSettings(), monomial_bases=nothing, verbose=true)"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 367,
+        "excerpt": "function is_valid_solution(problem::Problem, sol::PrimalSolution; check_slacks=true,  FF=QQ, g=1, verbose=true)"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 743,
+        "excerpt": "    basis_transformations(dualsol, primalsol; FF=QQ, g=1, settings=RoundingSettings())"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 745,
+        "excerpt": "Return basis transformations for each matrix variable in primalsol such that the first few columns "
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 747,
+        "excerpt": "the variables of primalsol, and values `(transpose(B), B^-1, num_kernelvecs)` so that `(transpose(B) X B)[1:num_kernelvecs, 1:num_kernelvecs]`"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 750,
+        "excerpt": "function basis_transformations(dualsol::DualSolution, sol::PrimalSolution; FF=QQ, g=1, settings::RoundingSettings=RoundingSettings(),verbose=true)"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 1229,
+        "excerpt": "function transform(sol::PrimalSolution{T}, Bs; g=1) where T"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 1236,
+        "excerpt": "    PrimalSolution{T}(sol.base_ring, matrixcoeff, sol.freevars)"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 1239,
+        "excerpt": "function undo_transform(sol::PrimalSolution{T}, Bs; FF=QQ) where T"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 1252,
+        "excerpt": "    PrimalSolution{T}(sol.base_ring, matrixcoeff, sol.freevars)"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 1284,
+        "excerpt": "function get_rational_system(problem::Problem, primalsol::PrimalSolution, FF::QQField, g=1; columns = nothing, monomial_bases=nothing, settings=RoundingSettings(), verbose=true)"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 1284,
+        "excerpt": "function get_rational_system(problem::Problem, primalsol::PrimalSolution, FF::QQField, g=1; columns = nothing, monomial_bases=nothing, settings=RoundingSettings(), verbose=true)"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 1287,
+        "excerpt": "        columns = 1:length(vectorize(primalsol))"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 1289,
+        "excerpt": "    x = vectorize(primalsol)"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 1292,
+        "excerpt": "    t = @elapsed A, b = partial_linearsystem(problem, as_primal_solution(primalsol, x), columns; monomial_bases=monomial_bases)"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 1299,
+        "excerpt": "function get_rational_system(problem::Problem, primalsol::PrimalSolution, FF::AbsSimpleNumField, g; columns=nothing, monomial_bases=nothing, settings=RoundingSettings(), verbose=true)"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 1299,
+        "excerpt": "function get_rational_system(problem::Problem, primalsol::PrimalSolution, FF::AbsSimpleNumField, g; columns=nothing, monomial_bases=nothing, settings=RoundingSettings(), verbose=true)"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 1317,
+        "excerpt": "    x = vectorize(primalsol)"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 1361,
+        "excerpt": "    exact_solution(problem::Problem, dualsol::DualSolution, primalsol::PrimalSolution; transformed=false, FF = QQ, g=1, settings::RoundingSettings=RoundingSettings(), monomial_bases=nothing)"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 1361,
+        "excerpt": "    exact_solution(problem::Problem, dualsol::DualSolution, primalsol::PrimalSolution; transformed=false, FF = QQ, g=1, settings::RoundingSettings=RoundingSettings(), monomial_bases=nothing)"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 1364,
+        "excerpt": "Return `(success, exactprimalsol)` if `transformed=false`, and `(success, pd_transformed_exactsolution, transformations)` if `transformed=true`."
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 1366,
+        "excerpt": "function exact_solution(problem::Problem, dualsol::DualSolution, primalsol::PrimalSolution; "
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 1366,
+        "excerpt": "function exact_solution(problem::Problem, dualsol::DualSolution, primalsol::PrimalSolution; "
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 1374,
+        "excerpt": "    t = @elapsed Bs = basis_transformations(dualsol, primalsol, FF=FF, g=g, settings=settings, verbose=verbose)"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 1384,
+        "excerpt": "    # verbose && print(\"Transforming primalsol... \")"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 1385,
+        "excerpt": "    t = @elapsed transformed_primalsol = transform(primalsol,Bs, g=g)"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 1385,
+        "excerpt": "    t = @elapsed transformed_primalsol = transform(primalsol,Bs, g=g)"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 1393,
+        "excerpt": "    t = @elapsed exact_sol, correct_slacks = project_to_affine_space(transformed_problem, transformed_primalsol, FF=FF, g=g, settings=settings, monomial_bases=monomial_bases, verbose=verbose)"
+      },
+      {
+        "file": "src/ClusteredLowRankSolver.jl",
+        "line": 40,
+        "excerpt": "export DualSolution, PrimalSolution, matrixvar, freevar, slacks, matrixvars, freevars"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 52,
+        "excerpt": "- primalsol"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 89,
+        "excerpt": "    primalsol"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 96,
+        "excerpt": "    function SolverResult(status, dualsol, primalsol, solvetime, errorcode, primalobj, dualobj)"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 97,
+        "excerpt": "        data = (status, dualsol, primalsol, solvetime, errorcode, primalobj, dualobj)"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 140,
+        "excerpt": "  - `dualsol` (default: `nothing`): start from the solution `(dualsol, primalsol)` if both `dualsol` and `primalsol` are given"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 140,
+        "excerpt": "  - `dualsol` (default: `nothing`): start from the solution `(dualsol, primalsol)` if both `dualsol` and `primalsol` are given"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 141,
+        "excerpt": "  - `primalsol` (default: `nothing`): start from the solution `(dualsol, primalsol)` if both `dualsol` and `primalsol` are given"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 141,
+        "excerpt": "  - `primalsol` (default: `nothing`): start from the solution `(dualsol, primalsol)` if both `dualsol` and `primalsol` are given"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 141,
+        "excerpt": "  - `primalsol` (default: `nothing`): start from the solution `(dualsol, primalsol)` if both `dualsol` and `primalsol` are given"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 148,
+        "excerpt": "    signature `f(measurements, dualsol, primalsol)`, which is called at each iteration with the current"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 172,
+        "excerpt": "    # primalsol::Union{Nothing,PrimalSolution}=nothing,"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 172,
+        "excerpt": "    # primalsol::Union{Nothing,PrimalSolution}=nothing,"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 202,
+        "excerpt": "    primalsol::Union{Nothing,PrimalSolution}=nothing,"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 202,
+        "excerpt": "    primalsol::Union{Nothing,PrimalSolution}=nothing,"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 295,
+        "excerpt": "    if !isnothing(dualsol) && !isnothing(primalsol)"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 319,
+        "excerpt": "                    if !isnothing(primalsol)"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 320,
+        "excerpt": "                        Y.blocks[j].blocks[k][hs, vs] = primalsol.matrixvars[bl]"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 331,
+        "excerpt": "            y[i] = primalsol.freevars[k]"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 613,
+        "excerpt": "                dualsol, primalsol = solution_to_bigfloat(X, xbf, Y, ybf, sdp)"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 615,
+        "excerpt": "                dualsol, primalsol = solution_to_bigfloat(X, x, Y, y, sdp)"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 625,
+        "excerpt": "            serialize(save_name, (dualsol, primalsol))"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 650,
+        "excerpt": "            solution_callback(measurements, dualsol, primalsol)"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 750,
+        "excerpt": "    dualsol, primalsol = solution_to_bigfloat(X, x, Y, y, sdp)"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 760,
+        "excerpt": "        serialize(save_name, (dualsol, primalsol))"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 862,
+        "excerpt": "        primalsol,"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 912,
+        "excerpt": "\tprimalsol = PrimalSolution{BigFloat}(BigFloat, matrixvars, freevars)"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 912,
+        "excerpt": "\tprimalsol = PrimalSolution{BigFloat}(BigFloat, matrixvars, freevars)"
+      },
+      {
+        "file": "src/solver.jl",
+        "line": 914,
+        "excerpt": "    return dualsol, primalsol"
+      },
+      {
+        "file": "src/find_field.jl",
+        "line": 1,
+        "excerpt": "function select_vals(dualsol::DualSolution{T}, primalsol::PrimalSolution{T}, max_d=10; valbound=1e-15,errbound=1e-15, bits=100, max_coeff=1000, sizebound=10^6) where T"
+      },
+      {
+        "file": "src/find_field.jl",
+        "line": 1,
+        "excerpt": "function select_vals(dualsol::DualSolution{T}, primalsol::PrimalSolution{T}, max_d=10; valbound=1e-15,errbound=1e-15, bits=100, max_coeff=1000, sizebound=10^6) where T"
+      },
+      {
+        "file": "src/find_field.jl",
+        "line": 5,
+        "excerpt": "        if maximum(abs.(m)) > sizebound  && maximum(abs.(matrixvar(primalsol, k))) < sizebound "
+      },
+      {
+        "file": "src/find_field.jl",
+        "line": 6,
+        "excerpt": "            tmp = svd(matrixvar(primalsol, k))"
+      },
+      {
+        "file": "src/find_field.jl",
+        "line": 89,
+        "excerpt": "    find_field(dualsol, primalsol, max_degree=4; valbound=1e-15, errbound=1e-15, bits=100, max_coeff=1000)"
+      },
+      {
+        "file": "src/find_field.jl",
+        "line": 97,
+        "excerpt": "function find_field(dualsol::DualSolution{T}, primalsol::PrimalSolution{T}, max_degree=10; valbound=1e-15,errbound=1e-15, bits=max_degree*100, max_coeff=10^5) where T"
+      },
+      {
+        "file": "src/find_field.jl",
+        "line": 97,
+        "excerpt": "function find_field(dualsol::DualSolution{T}, primalsol::PrimalSolution{T}, max_degree=10; valbound=1e-15,errbound=1e-15, bits=max_degree*100, max_coeff=10^5) where T"
+      },
+      {
+        "file": "src/find_field.jl",
+        "line": 98,
+        "excerpt": "    vals = select_vals(dualsol, primalsol, max_degree;valbound=valbound, errbound=errbound, bits=bits, max_coeff=max_coeff)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 10,
+        "excerpt": "        problem, dualsol, primalsol = min_f(2)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 11,
+        "excerpt": "        @test objvalue(problem, primalsol) \u2248 -2.113 atol=1e-2"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 20,
+        "excerpt": "        problem, dualsol, primalsol = cohnelkies(8, 15, prec=256)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 21,
+        "excerpt": "        @test objvalue(problem, primalsol) \u2248 BigFloat(pi)^4/384 atol=1e-4 #exact in the limit of d-> \u221e, but for this d the error still is relatively large"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 23,
+        "excerpt": "        problem, dualsol, primalsol = Nsphere_packing(8, 15, [1//2,1//2],2, prec=300)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 24,
+        "excerpt": "        @test objvalue(problem, primalsol) \u2248 BigFloat(pi)^4/384 atol=1e-4"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 29,
+        "excerpt": "        problem, dualsol, primalsol = three_point_spherical_codes(4, 1//6, -1, 4, prec=256, omega_d=10^3, omega_p=10^3)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 30,
+        "excerpt": "        @test objvalue(problem, primalsol) \u2248 10 atol=1e-5"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 39,
+        "excerpt": "        _,_,primalsol1,_ = solvesdp(oldproblem)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 40,
+        "excerpt": "        _,_,primalsol2,_ = solvesdp(newproblem)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 41,
+        "excerpt": "        @test objvalue(oldproblem, primalsol1) \u2248 objvalue(newproblem, primalsol2) atol=1e-10"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 41,
+        "excerpt": "        @test objvalue(oldproblem, primalsol1) \u2248 objvalue(newproblem, primalsol2) atol=1e-10"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 44,
+        "excerpt": "        _,_,primalsol3,_ = solvesdp(sdp)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 45,
+        "excerpt": "        @test objvalue(oldproblem, primalsol3) \u2248 objvalue(oldproblem, primalsol1) atol=1e-10"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 45,
+        "excerpt": "        @test objvalue(oldproblem, primalsol3) \u2248 objvalue(oldproblem, primalsol1) atol=1e-10"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 56,
+        "excerpt": "        _, _, primalsol, _ = solvesdp(problem, preprocess=false)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 57,
+        "excerpt": "        _, _, primalsol1, _ = solvesdp(problem, preprocess=true)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 58,
+        "excerpt": "        @test objvalue(problem, primalsol) \u2248 objvalue(problem, primalsol1) atol=1e-10 "
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 58,
+        "excerpt": "        @test objvalue(problem, primalsol) \u2248 objvalue(problem, primalsol1) atol=1e-10 "
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 65,
+        "excerpt": "        _,dualsol,primalsol,_ = solvesdp(problem, save_settings=SaveSettings(iter_interval=1, save_name=\"test\"))"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 67,
+        "excerpt": "        _,dualsol,primalsol,_ = solvesdp(problem, save_settings=SaveSettings(time_interval=1, save_name=\"test#\", only_last=false))"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 69,
+        "excerpt": "        _,dualsol,primalsol,_ = solvesdp(problem, save_settings=SaveSettings(iter_interval=1, save_name=\"testiter#\", only_last=false))"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 94,
+        "excerpt": "            success, problem, exactprimalsol = delsarte_round(8, 3, 1//2)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 95,
+        "excerpt": "            success && objvalue(problem, exactprimalsol) == 240           "
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 98,
+        "excerpt": "            problem, dualsol, primalsol = three_point_spherical_codes(4, 1//6, -1, 4,prec=256, duality_gap_threshold=1e-30, omega_d = 10^3, omega_p=10^3)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 99,
+        "excerpt": "            success, exactprimalsol = exact_solution(problem, dualsol, primalsol)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 99,
+        "excerpt": "            success, exactprimalsol = exact_solution(problem, dualsol, primalsol)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 100,
+        "excerpt": "            success && objvalue(problem, exactprimalsol) == 10"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 106,
+        "excerpt": "        obj, problem, dualsol, primalsol = delsarte_exact(4, 9, 1/(z-1); FF=N, g = gapprox)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 108,
+        "excerpt": "            N2, gapprox2 = find_field(dualsol,primalsol)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 116,
+        "excerpt": "            success, exactprimalsol = exact_solution(problem, dualsol, primalsol; FF=N, g=gapprox)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 116,
+        "excerpt": "            success, exactprimalsol = exact_solution(problem, dualsol, primalsol; FF=N, g=gapprox)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 117,
+        "excerpt": "            objexact = objvalue(problem, exactprimalsol)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 123,
+        "excerpt": "            obj, problem1, dualsol1, primalsol1 = delsarte_exact(n1, d1, costheta1; prec=512)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 133,
+        "excerpt": "            obj2, problem2, dualsol2, primalsol2 = delsarte_exact(n2, d2, costheta2; FF=N, g = gapprox)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 146,
+        "excerpt": "                    problem, dualsol, primalsol, b, FF, g, val = problem1, dualsol1, primalsol1, b1, QQ, BigFloat(1), val1"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 146,
+        "excerpt": "                    problem, dualsol, primalsol, b, FF, g, val = problem1, dualsol1, primalsol1, b1, QQ, BigFloat(1), val1"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 148,
+        "excerpt": "                    problem, dualsol, primalsol, b, FF, g, val = problem2, dualsol2, primalsol2, b2, N, gapprox, val2"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 148,
+        "excerpt": "                    problem, dualsol, primalsol, b, FF, g, val = problem2, dualsol2, primalsol2, b2, N, gapprox, val2"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 162,
+        "excerpt": "                        success1, exactprimalsol = exact_solution(problem, dualsol, primalsol; FF=FF, g=g, monomial_bases=[b], settings=settings, verbose=false)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 162,
+        "excerpt": "                        success1, exactprimalsol = exact_solution(problem, dualsol, primalsol; FF=FF, g=g, monomial_bases=[b], settings=settings, verbose=false)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 163,
+        "excerpt": "                        success2, exactprimalsol = exact_solution(problem, dualsol, primalsol; FF=FF, g=g, settings=settings, verbose=false)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 163,
+        "excerpt": "                        success2, exactprimalsol = exact_solution(problem, dualsol, primalsol; FF=FF, g=g, settings=settings, verbose=false)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 165,
+        "excerpt": "                        # success, problem, exactprimalsol = delsarte_round(8, 3, 1//2, settings=settings)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 166,
+        "excerpt": "                        all_success = all_success && success1 && success2 && objvalue(problem, exactprimalsol) == val     "
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 178,
+        "excerpt": "        _,dualsol,primalsol,_ = solvesdp(problem, duality_gap_threshold=1e-5)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 179,
+        "excerpt": "        status, dualsol2, primalsol2, _ = solvesdp(problem; primalsol, dualsol, duality_gap_threshold=1e-10)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 179,
+        "excerpt": "        status, dualsol2, primalsol2, _ = solvesdp(problem; primalsol, dualsol, duality_gap_threshold=1e-10)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 180,
+        "excerpt": "        @test isapprox(objvalue(problem, primalsol), objvalue(problem, primalsol2), atol=1e-4)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 180,
+        "excerpt": "        @test isapprox(objvalue(problem, primalsol), objvalue(problem, primalsol2), atol=1e-4)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 265,
+        "excerpt": "        _, _, primalsol, _ = solvesdp(prob, omega_d=10, omega_p = 10, preprocess=true)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 266,
+        "excerpt": "        @test objvalue(prob, primalsol) \u2248 1 atol=1e-5 "
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 267,
+        "excerpt": "        @test norm(slacks(prob, primalsol)) < 1e-5"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 272,
+        "excerpt": "        _, _, primalsol, _ = solvesdp(prob, omega_d=10, omega_p = 10, preprocess=true)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 273,
+        "excerpt": "        @test objvalue(prob, primalsol) \u2248 5//4 atol=1e-5 "
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 274,
+        "excerpt": "        @test norm(slacks(prob, primalsol)) < 1e-5"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 279,
+        "excerpt": "        _, _, primalsol, _ = solvesdp(prob, omega_d=10, omega_p = 10, preprocess=true)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 280,
+        "excerpt": "        @test objvalue(prob, primalsol) \u2248 1 atol=1e-5 "
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 281,
+        "excerpt": "        @test norm(slacks(prob, primalsol)) < 1e-5"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 291,
+        "excerpt": "        _, _, primalsol, _ = solvesdp(prob, preprocess=true)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 292,
+        "excerpt": "        @test objvalue(prob, primalsol) \u2248 1.5 atol=1e-5 "
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 293,
+        "excerpt": "        @test norm(slacks(prob, primalsol)) < 1e-5"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 299,
+        "excerpt": "        _, _, primalsol, _ = solvesdp(prob, preprocess=true)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 300,
+        "excerpt": "        @test objvalue(prob, primalsol) \u2248 1.25 atol=1e-5 "
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 301,
+        "excerpt": "        @test norm(slacks(prob, primalsol)) < 1e-5"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 306,
+        "excerpt": "        _, _, primalsol, _ = solvesdp(prob, preprocess=true)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 307,
+        "excerpt": "        @test objvalue(prob, primalsol) \u2248 0 atol=1e-5 "
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 308,
+        "excerpt": "        @test norm(slacks(prob, primalsol)) < 1e-5"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 322,
+        "excerpt": "        _, _, primalsol, _ = solvesdp(prob, preprocess=true)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 323,
+        "excerpt": "        @test objvalue(prob, primalsol) \u2248 1 atol=1e-5 "
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 334,
+        "excerpt": "        @test res.primalobj == objvalue(problem, res.primalsol)"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 344,
+        "excerpt": "        @test optimal(solvesdp(problem, solution_callback=(measurements, dualsol, primalsol)->(matrixvar(primalsol, :z)[1,1] isa BigFloat))[1])"
+      },
+      {
+        "file": "test/runtests_solver.jl",
+        "line": 344,
+        "excerpt": "        @test optimal(solvesdp(problem, solution_callback=(measurements, dualsol, primalsol)->(matrixvar(primalsol, :z)[1,1] isa BigFloat))[1])"
+      }
+    ],
+    "start_solution": [],
+    "starting_point": [],
+    "initialpoint": [],
+    "x0": [
+      {
+        "file": "src/rounding.jl",
+        "line": 565,
+        "excerpt": "    x0 = roundx(x - sum(g^i * y[m*(i-1)+1:m*i] for i=1:deg-1), power=power)"
+      },
+      {
+        "file": "src/rounding.jl",
+        "line": 566,
+        "excerpt": "    xfinal = vcat(x0, roundx(y, power=power))"
+      }
+    ],
+    "y0": []
+  },
+  "solvesdp_signatures": [
+    {
+      "file": "src/solver.jl",
+      "line": 153,
+      "excerpt": "function solvesdp(\n    problem::Problem;\n    prec=precision(BigFloat), # The precision used in the algorithm.\n    kwargs...)\n    # maxiterations=500,\n    # beta_infeasible=3//10, # try to decrease mu by this factor when infeasible\n    # beta_feasible = 1//10, # try to decrease mu by this factor when feasible\n    # gamma=9//10, # this fraction of the maximum possible step size is used\n    # omega_p=big(10)^(10), # initial size of the dual PSD variables #TODO: define one omega to be the same as the other?\n    # omega_d=big(10)^(10), # initial size of the primal PSD variables\n    # duality_gap_threshold=1e-15, # how near to optimal does the solution need to be\n    # dual_error_threshold=1e-30,  # how feasible does the dual solution need to be\n    # primal_error_threshold=1e-30, # how feasible does the primal solution need to be\n    # max_complementary_gap=big(10)^100, # the maximum of <X,Y>/#rows(X)\n    # need_dual_feasible=false, # terminate when the solution is dual feasible\n    # need_primal_feasible=false, # terminate when the solution is primal feasible\n    # verbose = true, # false: print nothing, true: print information after each iteration\n    # step_length_threshold=1e-7, # quit if the one of the step lengths is shorter than this, indicating precision errors or infeasibility\n    # dualsol::Union{Nothing,DualSolution}=nothing,\n    # primalsol::Union{Nothing,PrimalSolution}=nothing,\n    # correctoronly=false,\n    # #experimental & testing:\n    # matmul_prec=prec, # precision for matrix multiplications for the bilinear pairings. A lower precision increases speed and probably decreases memory consumption, but also increases the minimum errors\n\t# testing=false, # print the times of the first two iterations. This is for testing purposes\n# )\n    sdp = ClusteredLowRankSDP(problem, prec=prec)\n    solvesdp(sdp; prec=prec, kwargs...)\nend\n\n\nfunction solvesdp(\n    sdp::ClusteredLowRankSDP,\n    threadinginfo::ThreadingInfo=ThreadingInfo(sdp); # the order of j and (j,l) used for threading\n    prec=precision(BigFloat), # The precision used in the algorithm.\n    maxiterations=500,\n    beta_infeasible=3//10, # try to decrease mu by this factor when infeasible\n    beta_feasible = 1//10, # try to decrease mu by this factor when feasible\n    gamma=9//10, # this fraction of the maximum possible step size is used\n    omega_p=big(10)^(10), # initial size of the dual PSD variables #TODO: define one omega to be the same as the other?\n    omega_d=big(10)^(10), # initial size of the primal PSD variables\n    duality_gap_threshold=1e-15, # how near to optimal does the solution need to be\n    dual_error_threshold=1e-30,  # how feasible does the dual solution need to be\n    primal_error_threshold=1e-30, # how feasible does the primal solution need to be\n    max_complementary_gap=big(10)^100, # the maximum of <X,Y>/#rows(X)\n    need_dual_feasible=false, # terminate when the solution is dual feasible\n    need_primal_feasible=false, # terminate when the solution is primal feasible\n    verbose = true, # false: print nothing, true: print information after each iteration\n    step_length_threshold=1e-7, # quit if the one of the step lengths is shorter than this, indicating precision errors or infeasibility\n    dualsol::Union{Nothing,DualSolution}=nothing,\n    primalsol::Union{Nothing,PrimalSolution}=nothing,\n    safe_step::Bool=true,\n    correctoronly=false,\n    save_settings::SaveSettings=SaveSettings(),\n    preprocess=false, #remove linear dependent constraints and free variables\n    iteration_callback=nothing,\n    solution_callback=nothing,\n    #experimental & testing:\n    matmul_prec=prec, # precision for matrix multiplications for the bilinear pairings. A lower precision increases speed and probably decreases memory consumption, but also increases the minimum errors\n\ttesting=false, # print the times of the first two iterations. This is for testing purposes\n)\n    if !isnothing(save_settings.iter_interval) ||\n       !isnothing(save_settings.time_interval)\n        isnothing(solution_callback) ||\n            error(\"solution_callback cannot be used together with save_settings\")\n    end\n\n    sdp = convert_to_prec(sdp, prec) #\n\n    # the default values mostly come from Simmons-Duffin original paper, or from the default values of SDPA-GMP (slow but stable mode)\n\t#NOTE: Because we use Arb through Arblib.jl, the code might look a bit like C instead of Julia.\n\t# There is an issue on the Arblib.jl GitHub about using the MutableArithmetic api to use e.g.\n\t#\tMA.@rewrite a + b + c\n\t# instead of\n\t#\tArblib.add!(a,a,b)\n\t#\tArblib.add!(a,a,c)\n\t# which might make it easier to read.\n\n    # convert to Arbs & the required precision:\n    omega_p, omega_d, gamma, beta_feasible, beta_infeasible, duality_gap_threshold, dual_error_threshold, primal_error_threshold =\n        AL.Arb.([omega_p, omega_d, gamma, beta_feasible, beta_infeasible, duality_gap_threshold, dual_error_threshold, primal_error_threshold], prec=prec)\n    # The algorithm:\n    # initialize:\n        # 1): choose initial point q = (0, \u03a9_p*I, 0, \u03a9_d*I) = (x,X,y,Y), with \u03a9>0\n    # main loop:\n        # 2): compute residues  P = \u2211_i A_i x_i - X - C, p = b -B^Tx, d = c- <A_* Y> - By and R = \u03bcI - XY\n        # 3): Take \u03bc = <X,Y>/K, and \u03bc_p = beta_p \u03bc with beta_p = 0 if q is dual & primal feasible, beta_infeasible otherwise\n        # 4): solve the system for the search direction (dx,dX, dy,dY), with R = \u03bc_p I - XY\n        # 5): compute corrector deformation \u03bc_c = beta_c \u03bc:\n            # r = <(X+dX),(Y+dY)>/(\u03bcK)\n            # beta = r^2 if r<1, r otherwise\n            # beta_c = min( max( beta_feasible, beta),1) if dual & primal feasible, max(beta_infeasible,beta) otherwise\n        # 6): solve the system for the search direction (dx,dX, dy,dY), with R = \u03bc_c I - XY\n        # 7): compute step lengths: \u03b1_p = min(\u03b3 \u03b1(X,dX),1), \u03b1_d = min(\u03b3 \u03b1(Y,dY),1)\n            # with \u03b1(M,dM) =  max(0, -eigmin(M)/eigmin(dM)) ( = 0 if eigmin(dM)> 0).\n        # 8): do the steps: x,X -> x,X + \u03b1_p dx,dX and y,Y -> y,Y + \u03b1_d dy,dY\n    # Repeat from step 2\n    if preprocess\n        num_constr = [size(sdp.B[j], 1) for j in eachindex(sdp.B)]\n        cs, var_rels, cdual_recovery = preprocess!(sdp)\n        c_removed = [Int[] for j in eachindex(sdp.B)]\n        for (i,j,p) in cs\n            push!(c_removed[j], p)\n        end\n        cs_leftover = [[pi for pi=1:num_constr[j] if !(pi in c_removed[j])] for j in eachindex(sdp.B)]\n        cs_map = [Dict(v=>k for (k,v) in enumerate(cs_leftover[j])) for j in eachindex(sdp.B)]\n    else\n        cs_map = [i=1:size(sdp.B[j],1) for j in eachindex(sdp.B)]\n    end\n    # get the blocksizes to initiate the variables\n    subblocksizes = [[0 for l in eachindex(sdp.A[j])] for j in eachindex(sdp.A)]\n    for j in eachindex(sdp.A)\n        for l in eachindex(sdp.A[j])\n            for r=1:size(sdp.A[j][l],1),s=1:size(sdp.A[j][l],2)\n                for p in keys(sdp.A[j][l][r,s])\n                    if subblocksizes[j][l] == 0\n                        subblocksizes[j][l] = siz"
+    },
+    {
+      "file": "src/solver.jl",
+      "line": 183,
+      "excerpt": "function solvesdp(\n    sdp::ClusteredLowRankSDP,\n    threadinginfo::ThreadingInfo=ThreadingInfo(sdp); # the order of j and (j,l) used for threading\n    prec=precision(BigFloat), # The precision used in the algorithm.\n    maxiterations=500,\n    beta_infeasible=3//10, # try to decrease mu by this factor when infeasible\n    beta_feasible = 1//10, # try to decrease mu by this factor when feasible\n    gamma=9//10, # this fraction of the maximum possible step size is used\n    omega_p=big(10)^(10), # initial size of the dual PSD variables #TODO: define one omega to be the same as the other?\n    omega_d=big(10)^(10), # initial size of the primal PSD variables\n    duality_gap_threshold=1e-15, # how near to optimal does the solution need to be\n    dual_error_threshold=1e-30,  # how feasible does the dual solution need to be\n    primal_error_threshold=1e-30, # how feasible does the primal solution need to be\n    max_complementary_gap=big(10)^100, # the maximum of <X,Y>/#rows(X)\n    need_dual_feasible=false, # terminate when the solution is dual feasible\n    need_primal_feasible=false, # terminate when the solution is primal feasible\n    verbose = true, # false: print nothing, true: print information after each iteration\n    step_length_threshold=1e-7, # quit if the one of the step lengths is shorter than this, indicating precision errors or infeasibility\n    dualsol::Union{Nothing,DualSolution}=nothing,\n    primalsol::Union{Nothing,PrimalSolution}=nothing,\n    safe_step::Bool=true,\n    correctoronly=false,\n    save_settings::SaveSettings=SaveSettings(),\n    preprocess=false, #remove linear dependent constraints and free variables\n    iteration_callback=nothing,\n    solution_callback=nothing,\n    #experimental & testing:\n    matmul_prec=prec, # precision for matrix multiplications for the bilinear pairings. A lower precision increases speed and probably decreases memory consumption, but also increases the minimum errors\n\ttesting=false, # print the times of the first two iterations. This is for testing purposes\n)\n    if !isnothing(save_settings.iter_interval) ||\n       !isnothing(save_settings.time_interval)\n        isnothing(solution_callback) ||\n            error(\"solution_callback cannot be used together with save_settings\")\n    end\n\n    sdp = convert_to_prec(sdp, prec) #\n\n    # the default values mostly come from Simmons-Duffin original paper, or from the default values of SDPA-GMP (slow but stable mode)\n\t#NOTE: Because we use Arb through Arblib.jl, the code might look a bit like C instead of Julia.\n\t# There is an issue on the Arblib.jl GitHub about using the MutableArithmetic api to use e.g.\n\t#\tMA.@rewrite a + b + c\n\t# instead of\n\t#\tArblib.add!(a,a,b)\n\t#\tArblib.add!(a,a,c)\n\t# which might make it easier to read.\n\n    # convert to Arbs & the required precision:\n    omega_p, omega_d, gamma, beta_feasible, beta_infeasible, duality_gap_threshold, dual_error_threshold, primal_error_threshold =\n        AL.Arb.([omega_p, omega_d, gamma, beta_feasible, beta_infeasible, duality_gap_threshold, dual_error_threshold, primal_error_threshold], prec=prec)\n    # The algorithm:\n    # initialize:\n        # 1): choose initial point q = (0, \u03a9_p*I, 0, \u03a9_d*I) = (x,X,y,Y), with \u03a9>0\n    # main loop:\n        # 2): compute residues  P = \u2211_i A_i x_i - X - C, p = b -B^Tx, d = c- <A_* Y> - By and R = \u03bcI - XY\n        # 3): Take \u03bc = <X,Y>/K, and \u03bc_p = beta_p \u03bc with beta_p = 0 if q is dual & primal feasible, beta_infeasible otherwise\n        # 4): solve the system for the search direction (dx,dX, dy,dY), with R = \u03bc_p I - XY\n        # 5): compute corrector deformation \u03bc_c = beta_c \u03bc:\n            # r = <(X+dX),(Y+dY)>/(\u03bcK)\n            # beta = r^2 if r<1, r otherwise\n            # beta_c = min( max( beta_feasible, beta),1) if dual & primal feasible, max(beta_infeasible,beta) otherwise\n        # 6): solve the system for the search direction (dx,dX, dy,dY), with R = \u03bc_c I - XY\n        # 7): compute step lengths: \u03b1_p = min(\u03b3 \u03b1(X,dX),1), \u03b1_d = min(\u03b3 \u03b1(Y,dY),1)\n            # with \u03b1(M,dM) =  max(0, -eigmin(M)/eigmin(dM)) ( = 0 if eigmin(dM)> 0).\n        # 8): do the steps: x,X -> x,X + \u03b1_p dx,dX and y,Y -> y,Y + \u03b1_d dy,dY\n    # Repeat from step 2\n    if preprocess\n        num_constr = [size(sdp.B[j], 1) for j in eachindex(sdp.B)]\n        cs, var_rels, cdual_recovery = preprocess!(sdp)\n        c_removed = [Int[] for j in eachindex(sdp.B)]\n        for (i,j,p) in cs\n            push!(c_removed[j], p)\n        end\n        cs_leftover = [[pi for pi=1:num_constr[j] if !(pi in c_removed[j])] for j in eachindex(sdp.B)]\n        cs_map = [Dict(v=>k for (k,v) in enumerate(cs_leftover[j])) for j in eachindex(sdp.B)]\n    else\n        cs_map = [i=1:size(sdp.B[j],1) for j in eachindex(sdp.B)]\n    end\n    # get the blocksizes to initiate the variables\n    subblocksizes = [[0 for l in eachindex(sdp.A[j])] for j in eachindex(sdp.A)]\n    for j in eachindex(sdp.A)\n        for l in eachindex(sdp.A[j])\n            for r=1:size(sdp.A[j][l],1),s=1:size(sdp.A[j][l],2)\n                for p in keys(sdp.A[j][l][r,s])\n                    if subblocksizes[j][l] == 0\n                        subblocksizes[j][l] = size(sdp.A[j][l][r,s][p],1)\n                    elseif subblocksizes[j][l] != size(sdp.A[j][l][r,s][p],1)\n                        s1 = subblocksizes[j][l]\n                        s2 = size(sdp.A[j][l][r,s][p],1)\n                        error(\"The subblocks (j,l,(r,s)) must have the same size for every r,s. $s1 != $s2\")\n                    end\n                end\n            end\n        end\n    end\n\n    # step 1: initialize. We may pass a solution from a previous run\n    x = ArbRefMatrix(sum(size.(sdp.c,1)), 1, prec = prec) # all tuples (j,r,s,k), equals size of S.\n    X = BlockDiagonal([BlockDiagonal([ArbRefMatrix(subblocksizes[j][l]*size(sdp.A[j][l],1),\n        subblocksizes[j][l]*size(sdp.A[j][l],1), prec=prec) for l in eachindex(sdp.A[j])]) for j in eachindex(sdp.A)])\n    for j in eachindex(sdp.A), l in eachindex(sdp.A[j])\n        Arblib.one!(X.blocks[j].blocks[l])\n        Arblib.mul!(X.blocks[j].blocks[l],X.blocks[j].blocks[l], omega_p)\n    end\n    y = ArbRefMatrix(size(sdp.b,1), 1, prec=prec)\n    Y = BlockDiagonal([BlockDiagonal([ArbRefMatrix(subblocksizes[j][l]*size(sdp.A[j][l],1),\n        subblocksizes[j][l]*size(sdp.A[j][l],1), prec=prec) for l in eachindex(sdp.A[j])]) for j in eachindex(sdp.A)])\n    #set the X,Y matrices to omega_p resp. omega_d * I\n    for j in eachindex(sdp.A), l in eachindex(sdp.A[j])\n        Arblib.one!(Y.blocks[j].blocks[l])\n        Arblib.mul!(Y.blocks[j].blocks[l],Y.blocks[j].blocks[l], omega_d)\n    end\n    if !isnothing(dualsol) && !isnothing(primalsol)\n        #TODO: update for preprocessing\n        # order_c goes from (j,sampleindex) to index_in_sdp\n        constraint_indices = sort(collect(keys(sdp.order_c)))\n        for (j,l) in constraint_indices\n            idx = sdp.order_c[(j,l)]\n            if idx > 0 # other elements correspond to empty constraints\n                x[idx] = dualsol.x[j][l]\n      "
+    }
+  ]
+}
