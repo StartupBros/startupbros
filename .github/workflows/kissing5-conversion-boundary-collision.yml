@@ -1,0 +1,234 @@
+name: kissing5-conversion-boundary-collision
+
+on:
+  push:
+    branches:
+      - kissing5-relay-20260814
+    paths:
+      - .github/workflows/kissing5-conversion-boundary-collision.yml
+  workflow_dispatch:
+
+jobs:
+  conversion-collision:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 80
+    env:
+      JULIA_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.12.6'
+
+      - name: Clone, patch, and instantiate fixed solver
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/nanleij/ClusteredLowRankSolver.jl.git clrs
+          git -C clrs checkout 09ac81aed031bdea714832cf515244f6eb223531
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('clrs/src/solver.jl')
+          text = p.read_text()
+          old_sig = '\ttesting=false, # print the times of the first two iterations. This is for testing purposes\n)'
+          new_sig = '\ttesting=false, # print the times of the first two iterations. This is for testing purposes\n    skip_convert=false,\n    converted_sdp_callback=nothing,\n)'
+          assert text.count(old_sig) == 1, text.count(old_sig)
+          text = text.replace(old_sig, new_sig, 1)
+          old_conv = '    sdp = convert_to_prec(sdp, prec) #\n'
+          new_conv = '''    if !skip_convert\n        sdp = convert_to_prec(sdp, prec)\n    end\n    if !isnothing(converted_sdp_callback)\n        converted_sdp_callback(sdp)\n    end\n'''
+          assert text.count(old_conv) == 1, text.count(old_conv)
+          text = text.replace(old_conv, new_conv, 1)
+          p.write_text(text)
+          print('PATCH_APPLIED_CONVERSION_BOUNDARY')
+          PY
+          git -C clrs diff -- src/solver.jl | tee conversion_boundary.patch
+          julia --project=clrs -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+
+      - name: Run direct, bypass-conversion, and forced-reconversion collision
+        run: |
+          set -euxo pipefail
+          mkdir -p results
+          cp conversion_boundary.patch results/
+          cp .github/workflows/kissing5-conversion-boundary-collision.yml results/workflow.yml
+          julia --project=clrs - <<'JULIA' > results/solve.log 2>&1
+          using SHA
+          include("clrs/examples/ThreePointBound.jl")
+          using .ThreePointBound, ClusteredLowRankSolver
+
+          const PREC = 192
+          const COMMON = (
+              prec=PREC,
+              matmul_prec=PREC,
+              preprocess=false,
+              duality_gap_threshold=big"1e-80",
+              dual_error_threshold=big"1e-80",
+              primal_error_threshold=big"1e-80",
+              omega_d=10^3,
+              omega_p=10^3,
+              step_length_threshold=big"1e-30",
+              verbose=false,
+          )
+
+          function cmp_matrixvars(a, b)
+              @assert Set(keys(a)) == Set(keys(b))
+              entries=0; nonzero=0; maxdiff=BigFloat(0); firstdiff=nothing
+              for key in sort!(collect(keys(a)), by=string)
+                  A=Matrix(a[key]); B=Matrix(b[key]); @assert size(A)==size(B)
+                  for idx in eachindex(A)
+                      delta=abs(BigFloat(A[idx])-BigFloat(B[idx])); entries+=1
+                      if delta != 0
+                          nonzero+=1
+                          isnothing(firstdiff) && (firstdiff=(repr(key),idx,string(A[idx]),string(B[idx]),string(delta)))
+                      end
+                      maxdiff=max(maxdiff,delta)
+                  end
+              end
+              (entries=entries,nonzero=nonzero,maxdiff=maxdiff,first=firstdiff)
+          end
+
+          function cmp_pair(d1,p1,d2,p2)
+              dm=cmp_matrixvars(d1.matrixvars,d2.matrixvars)
+              pm=cmp_matrixvars(p1.matrixvars,p2.matrixvars)
+              @assert length(d1.x)==length(d2.x)
+              xe=xn=0; xd=BigFloat(0); xf=nothing
+              for j in eachindex(d1.x), i in eachindex(d1.x[j])
+                  delta=abs(BigFloat(d1.x[j][i])-BigFloat(d2.x[j][i])); xe+=1
+                  if delta != 0
+                      xn+=1
+                      isnothing(xf) && (xf=(j,i,string(delta)))
+                  end
+                  xd=max(xd,delta)
+              end
+              @assert Set(keys(p1.freevars)) == Set(keys(p2.freevars)
+              fe=fn=0; fd=BigFloat(0); ff=nothing
+              for key in sort!(collect(keys(p1.freevars)),by=string)
+                  delta=abs(BigFloat(p1.freevars[key])-BigFloat(p2.freevars[key])); fe+=1
+                  if delta != 0
+                      fn+=1
+                      isnothing(ff) && (ff=(repr(key),string(delta)))
+                  end
+                  fd=max(fd,delta)
+              end
+              (entries=dm.entries+pm.entries+xe+fe,
+               nonzero=dm.nonzero+pm.nonzero+xn+fn,
+               maxdiff=max(dm.maxdiff,pm.maxdiff,xd,fd),
+               dual_matrix=dm,primal_matrix=pm,
+               x_entries=xe,x_nonzero=xn,x_maxdiff=xd,
+               free_entries=fe,free_nonzero=fn,free_maxdiff=fd,
+               first_x=xf,first_free=ff)
+          end
+
+          # Build a base compiled object without taking an update.
+          problem, _, _ = three_point_spherical_codes(5,1//2,14,14; COMMON..., maxiterations=0)
+          sdp_base = ClusteredLowRankSolver.ClusteredLowRankSDP(problem; prec=PREC)
+          threading_base = ClusteredLowRankSolver.ThreadingInfo(sdp_base)
+
+          converted_ref = Ref{Any}()
+          direct_states=Dict{Int,Any}(); direct_measurements=Dict{Int,Any}()
+          direct_callback=function(m,d,p)
+              direct_measurements[m.iter]=m
+              if m.iter==2 || m.iter==3
+                  direct_states[m.iter]=(deepcopy(d),deepcopy(p))
+              end
+          end
+          direct_result = ClusteredLowRankSolver.solvesdp(
+              sdp_base, threading_base;
+              COMMON...,
+              maxiterations=3,
+              skip_convert=false,
+              converted_sdp_callback=s->(converted_ref[]=s),
+              solution_callback=direct_callback,
+          )
+          d2,p2=direct_states[2]; d3,p3=direct_states[3]
+          @assert cmp_pair(d3,p3,direct_result.dualsol,direct_result.primalsol).nonzero==0
+          sdp_converted=converted_ref[]
+          threading_converted=ClusteredLowRankSolver.ThreadingInfo(sdp_converted)
+
+          # Selected branch: bypass the second convert_to_prec call.
+          bypass_measurements=Dict{Int,Any}()
+          bypass_callback=function(m,d,p); bypass_measurements[m.iter]=m; end
+          bypass_result = ClusteredLowRankSolver.solvesdp(
+              sdp_converted, threading_converted;
+              COMMON...,
+              maxiterations=1,
+              skip_convert=true,
+              dualsol=d2,
+              primalsol=p2,
+              solution_callback=bypass_callback,
+          )
+          bypass_cmp=cmp_pair(d3,p3,bypass_result.dualsol,bypass_result.primalsol)
+
+          # Adversarial control: force a second conversion of the same captured object.
+          reconvert_ref=Ref{Any}()
+          reconvert_measurements=Dict{Int,Any}()
+          reconvert_callback=function(m,d,p); reconvert_measurements[m.iter]=m; end
+          reconvert_result = ClusteredLowRankSolver.solvesdp(
+              sdp_converted, threading_converted;
+              COMMON...,
+              maxiterations=1,
+              skip_convert=false,
+              converted_sdp_callback=s->(reconvert_ref[]=s),
+              dualsol=d2,
+              primalsol=p2,
+              solution_callback=reconvert_callback,
+          )
+          reconvert_cmp=cmp_pair(d3,p3,reconvert_result.dualsol,reconvert_result.primalsol)
+          bypass_vs_reconvert=cmp_pair(bypass_result.dualsol,bypass_result.primalsol,reconvert_result.dualsol,reconvert_result.primalsol)
+
+          # Comparator control.
+          d_bad=deepcopy(bypass_result.dualsol); p_bad=deepcopy(bypass_result.primalsol)
+          bad_key=first(sort!(collect(keys(d_bad.matrixvars)),by=string))
+          bad_delta=setprecision(BigFloat,PREC) do; BigFloat(2)^(-100); end
+          d_bad.matrixvars[bad_key][1,1]+=bad_delta
+          bad_cmp=cmp_pair(bypass_result.dualsol,bypass_result.primalsol,d_bad,p_bad)
+          @assert bad_cmp.nonzero==1 && bad_cmp.maxdiff==bad_delta
+
+          fields=(:mu,:d_obj,:p_obj,:dual_gap,:D_error,:d_error,:p_error,:alpha_d,:alpha_p,:beta)
+          open("results/summary.tsv","w") do io
+              println(io,"status\tPASS")
+              println(io,"solver_commit\t09ac81aed031bdea714832cf515244f6eb223531")
+              println(io,"precision\t",PREC)
+              println(io,"threads\t",Threads.nthreads())
+              println(io,"bypass_entries\t",bypass_cmp.entries)
+              println(io,"bypass_nonzero\t",bypass_cmp.nonzero)
+              println(io,"bypass_maxdiff\t",bypass_cmp.maxdiff)
+              println(io,"bypass_exact\t",bypass_cmp.nonzero==0)
+              println(io,"reconvert_entries\t",reconvert_cmp.entries)
+              println(io,"reconvert_nonzero\t",reconvert_cmp.nonzero)
+              println(io,"reconvert_maxdiff\t",reconvert_cmp.maxdiff)
+              println(io,"reconvert_exact\t",reconvert_cmp.nonzero==0)
+              println(io,"bypass_vs_reconvert_entries\t",bypass_vs_reconvert.entries)
+              println(io,"bypass_vs_reconvert_nonzero\t",bypass_vs_reconvert.nonzero)
+              println(io,"bypass_vs_reconvert_maxdiff\t",bypass_vs_reconvert.maxdiff)
+              println(io,"bad_key\t",repr(bad_key))
+              println(io,"bad_delta\t",bad_delta)
+              println(io,"bad_nonzero\t",bad_cmp.nonzero)
+              for f in fields
+                  db=abs(BigFloat(getproperty(direct_measurements[3],f))-BigFloat(getproperty(bypass_measurements[1],f)))
+                  dr=abs(BigFloat(getproperty(direct_measurements[3],f))-BigFloat(getproperty(reconvert_measurements[1],f)))
+                  println(io,"bypass_measurement_diff_",f,"\t",db)
+                  println(io,"reconvert_measurement_diff_",f,"\t",dr)
+              end
+          end
+          open("results/result.json","w") do io
+              print(io,"{\n")
+              print(io,"  \"bypass_exact\": ",bypass_cmp.nonzero==0 ? "true" : "false",",\n")
+              print(io,"  \"reconvert_exact\": ",reconvert_cmp.nonzero==0 ? "true" : "false",",\n")
+              print(io,"  \"bypass_nonzero\": ",bypass_cmp.nonzero,",\n")
+              print(io,"  \"reconvert_nonzero\": ",reconvert_cmp.nonzero,"\n")
+              print(io,"}\n")
+          end
+          println("CONVERSION_BOUNDARY_COLLISION_COMPLETE")
+          JULIA
+          grep -q CONVERSION_BOUNDARY_COLLISION_COMPLETE results/solve.log
+          sha256sum results/* > results/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kissing5-conversion-boundary-collision
+          path: results/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 9
