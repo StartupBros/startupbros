@@ -1,0 +1,94 @@
+name: perfect-cuboid-post25-14-screen
+
+on:
+  push:
+    paths:
+      - '.github/workflows/perfect-cuboid-post25-14-screen.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  screen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        M: [25, 26, 27, 28]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exact Magma six-factor rank-bound screen
+        env:
+          M: ${{ matrix.M }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          python3 - <<'PY'
+          import html, math, os, re, time, urllib.parse, urllib.request
+          M=int(os.environ['M'])
+          pairs=[]
+          for n in range(1,M):
+              if math.gcd(M,n)!=1 or (M-n)%2!=1:
+                  continue
+              if M==25 and n<=14:
+                  continue
+              pairs.append(n)
+          rows=[]
+          for n in pairs:
+              code=f'''
+          SetColumns(0);
+          m:={M}; n:={n};
+          a:=m^2-n^2; b:=2*m*n; A:=a^2; B:=b^2;
+          Es:=[
+            EllipticCurve([0,A-B,0,-A*B,0]),
+            EllipticCurve([0,B-A,0,-A*B,0]),
+            EllipticCurve([0,A^2+B^2,0,A^2*B^2,0]),
+            EllipticCurve([0,A+B,0,A*B,0]),
+            EllipticCurve([0,-A-B,0,A*B,0])
+          ];
+          c1:=10*a*b; c2:=20*a*b; c3:=5*(a+b)^2;
+          Append(~Es,EllipticCurve([0,c1+c2+c3,0,c1*c2+c1*c3+c2*c3,c1*c2*c3]));
+          print "PAIR",m,n,a,b,m^2+n^2;
+          for i in [1..6] do
+            lo,hi:=RankBounds(Es[i]);
+            print "R",i,lo,hi,RootNumber(Es[i]);
+          end for;
+          '''
+              body=urllib.parse.urlencode({'input':code}).encode()
+              req=urllib.request.Request('https://magma.maths.usyd.edu.au/xml/calculator.xml',data=body,method='POST')
+              for attempt in range(4):
+                  try:
+                      with urllib.request.urlopen(req,timeout=90) as r:
+                          raw=r.read().decode()
+                      break
+                  except Exception:
+                      if attempt==3: raise
+                      time.sleep(3*(attempt+1))
+              if '<offline>' in raw:
+                  raise SystemExit('Magma calculator offline')
+              lines=[html.unescape(x) for x in re.findall(r'<line>(.*?)</line>',raw,flags=re.S)]
+              out='\n'.join(lines)
+              if 'Runtime error' in out or 'User error' in out or '&gt;&gt;' in raw or '<warning>' in raw:
+                  raise SystemExit(f'Magma error for {(M,n)}:\n{out}')
+              print(out)
+              rr=[]
+              for line in lines:
+                  mm=re.fullmatch(r'R\s+(\d+)\s+(\d+)\s+(\d+)\s+(-?\d+)',line.strip())
+                  if mm: rr.append(tuple(map(int,mm.groups())))
+              if len(rr)!=6:
+                  raise SystemExit(f'incomplete ranks for {(M,n)}: {out}')
+              rows.append({'M':M,'N':n,'ranks':[[x[1],x[2]] for x in rr],'roots':[x[3] for x in rr]})
+              open(f'results/M{M}_N{n}.txt','w').write(out+'\n')
+          import json
+          open(f'results/M{M}.json','w').write(json.dumps(rows,indent=2)+'\n')
+          PY
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perfect-cuboid-post25-14-M${{ matrix.M }}
+          path: results/
+          if-no-files-found: error
