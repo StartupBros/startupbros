@@ -1,0 +1,93 @@
+name: kissing5-warmstart-api-audit
+
+on:
+  push:
+    branches:
+      - kissing5-relay-20260814
+    paths:
+      - .github/workflows/kissing5-warmstart-api-audit.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: kissing5-relay-20260814
+          fetch-depth: 0
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.12.6'
+      - name: Clone and instantiate fixed solver commit
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/nanleij/ClusteredLowRankSolver.jl.git clrs
+          git -C clrs checkout 09ac81aed031bdea714832cf515244f6eb223531
+          julia --project=clrs -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+      - name: Inspect public methods and source-level restart hooks
+        run: |
+          set -euxo pipefail
+          mkdir -p research/kissing5
+          julia --project=clrs <<'JULIA' > /tmp/julia_methods.txt
+          using ClusteredLowRankSolver
+          println("SOLVESDP_METHODS")
+          for m in methods(ClusteredLowRankSolver.solvesdp)
+              println(m)
+              try
+                  println("KWARGS=",Base.kwarg_decl(m))
+              catch e
+                  println("KWARGS_ERROR=",typeof(e))
+              end
+          end
+          JULIA
+          python3 - <<'PY'
+          from pathlib import Path
+          import re,json,hashlib
+          root=Path('clrs')
+          needles=['warm','resume','restart','initial_solution','initialsolution','initial_dual','initial_primal','dual_start','primal_start','dualstart','primalstart','dualsol','primalsol','start_solution','starting_point','initialpoint','x0','y0']
+          hits={n:[] for n in needles}
+          signatures=[]
+          for p in root.rglob('*.jl'):
+              text=p.read_text(errors='ignore')
+              low=text.lower()
+              for n in needles:
+                  for m in re.finditer(re.escape(n),low):
+                      line=low.count('\n',0,m.start())+1
+                      excerpt=text.splitlines()[line-1][:500]
+                      hits[n].append({'file':str(p.relative_to(root)),'line':line,'excerpt':excerpt})
+              for m in re.finditer(r'function\s+solvesdp\s*\(',text):
+                  signatures.append({'file':str(p.relative_to(root)),'line':text.count('\n',0,m.start())+1,'excerpt':text[m.start():m.start()+7000]})
+          method_text=Path('/tmp/julia_methods.txt').read_text()
+          public_restart_terms=[]
+          for n in needles:
+              if re.search(r'(?<![A-Za-z0-9_])'+re.escape(n)+r'(?![A-Za-z0-9_])',method_text,re.I): public_restart_terms.append(n)
+          source_restart_terms=[n for n,v in hits.items() if v]
+          # A direct checkpoint-resume API must expose a solution/start keyword in the public solvesdp method declaration.
+          direct_api=bool(public_restart_terms)
+          out={
+            'status':'PASS',
+            'solver_commit':'09ac81aed031bdea714832cf515244f6eb223531',
+            'method_introspection':method_text,
+            'public_restart_terms':public_restart_terms,
+            'source_restart_terms':source_restart_terms,
+            'direct_checkpoint_resume_api_detected':direct_api,
+            'source_hits':hits,
+            'solvesdp_signatures':signatures,
+          }
+          Path('research/kissing5/warmstart_api_audit.json').write_text(json.dumps(out,indent=2))
+          Path('research/kissing5/warmstart_api_audit.sha256').write_text(hashlib.sha256(Path('research/kissing5/warmstart_api_audit.json').read_bytes()).hexdigest()+'  warmstart_api_audit.json\n')
+          print(json.dumps({k:out[k] for k in ['status','public_restart_terms','source_restart_terms','direct_checkpoint_resume_api_detected']},indent=2))
+          PY
+      - name: Commit audit
+        run: |
+          set -euxo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add research/kissing5/warmstart_api_audit.json research/kissing5/warmstart_api_audit.sha256
+          git commit -m 'Record solver warm-start API audit' || exit 0
+          git push origin HEAD:kissing5-relay-20260814
