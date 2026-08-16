@@ -1,0 +1,61 @@
+name: perfect-cuboid-23-22-two-cover
+on:
+  push:
+    branches: [math/perfect-cuboid-23-22-two-cover]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Complete Magma two-cover and factor-field rank audit
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          cat > /tmp/run.py <<'PY'
+          import html,re,requests
+          code=r'''
+          SetColumns(0);
+          Q:=Rationals(); Qx<x>:=PolynomialRing(Q);
+          A1:=455400; A2:=910800; A3:=5586245;
+          f:=(x^2+A1)*(x^2+A2)*(x^2+A3);
+          C:=HyperellipticCurve(f);
+          Hk,AtoHk:=TwoCoverDescent(C);
+          print "COUNT",#Hk;
+          AA<theta>:=Domain(AtoHk);
+          for rec in [<506,x^2+A1,(x^2+A2)*(x^2+A3)>,
+                      <253,x^2+A2,(x^2+A1)*(x^2+A3)>,
+                      <5,x^2+A3,(x^2+A1)*(x^2+A2)>] do
+            d:=rec[1]; g:=rec[3];
+            L<a>:=NumberField(x^2+d); LX<X>:=PolynomialRing(L);
+            LT<T>:=quo<LX|Evaluate(g,X)>;
+            j:=hom<AA->LT|T>;
+            print "FIELD",d;
+            allsq:=true;
+            for h in Hk do
+              gam:=Norm(j(h@@AtoHk)); issq,rt:=IsSquare(gam);
+              print "GAMMA",gam,issq,rt;
+              allsq and:=issq;
+            end for;
+            print "ALLSQ",allsq;
+            Cg:=HyperellipticCurve(g); P0:=PointsAtInfinity(Cg)[1];
+            EQ,ctoE:=EllipticCurve(Cg,P0); ET:=QuadraticTwist(EQ,-d);
+            print "EQ",EQ; print "EQ_RB",RankBounds(EQ); print "EQ_TORS",TorsionSubgroup(EQ);
+            print "ET_RB",RankBounds(ET); print "ET_TORS",TorsionSubgroup(ET);
+          end for;
+          '''
+          r=requests.post('https://magma.maths.usyd.edu.au/xml/calculator.xml',data={'input':code},timeout=90)
+          r.raise_for_status(); open('results/raw.xml','w').write(r.text)
+          if '<offline>' in r.text or '<warning>' in r.text: print(r.text); raise SystemExit('calculator unavailable')
+          lines=[html.unescape(x) for x in re.findall(r'<line>(.*?)</line>',r.text,flags=re.S)]
+          out='\n'.join(lines).strip()+'\n'; open('results/output.txt','w').write(out); print(out)
+          if 'Runtime error' in out or '>>' in out: raise SystemExit('Magma error')
+          PY
+          python3 /tmp/run.py
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perfect-cuboid-23-22-two-cover
+          path: results/
+          if-no-files-found: error
