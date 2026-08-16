@@ -1,0 +1,134 @@
+name: kissing5-convert-idempotence
+
+on:
+  push:
+    branches:
+      - kissing5-relay-20260814
+    paths:
+      - .github/workflows/kissing5-convert-idempotence.yml
+  workflow_dispatch:
+
+jobs:
+  idempotence-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      JULIA_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.12.6'
+      - name: Clone fixed solver
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/nanleij/ClusteredLowRankSolver.jl.git clrs
+          git -C clrs checkout 09ac81aed031bdea714832cf515244f6eb223531
+          julia --project=clrs -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+      - name: Compare one and two same-precision conversions
+        run: |
+          set -euxo pipefail
+          mkdir -p results
+          cp .github/workflows/kissing5-convert-idempotence.yml results/workflow.yml
+          julia --project=clrs - <<'JULIA' > results/solve.log 2>&1
+          using SHA
+          include("clrs/examples/ThreePointBound.jl")
+          using .ThreePointBound, ClusteredLowRankSolver
+          const PREC=192
+          const COMMON=(prec=PREC,matmul_prec=PREC,preprocess=false,verbose=false,
+            duality_gap_threshold=big"1e-80",dual_error_threshold=big"1e-80",
+            primal_error_threshold=big"1e-80",omega_d=10^3,omega_p=10^3,
+            step_length_threshold=big"1e-30")
+
+          function cmp_scalar(a,b)
+              d=abs(BigFloat(a)-BigFloat(b))
+              return (entries=1,nonzero=d==0 ? 0 : 1,maxdiff=d)
+          end
+          function mergecmp(xs)
+              (entries=sum(x.entries for x in xs),
+               nonzero=sum(x.nonzero for x in xs),
+               maxdiff=maximum([BigFloat(0); [x.maxdiff for x in xs]]))
+          end
+          function cmp_matrix(A,B)
+              @assert size(A)==size(B)
+              es=length(A); nz=0; md=BigFloat(0)
+              for i in eachindex(A)
+                  d=abs(BigFloat(A[i])-BigFloat(B[i]))
+                  nz += d==0 ? 0 : 1; md=max(md,d)
+              end
+              (entries=es,nonzero=nz,maxdiff=md)
+          end
+          function cmp_lowrank(A,B)
+              @assert length(A.lambda)==length(B.lambda)
+              parts=Any[]
+              for i in eachindex(A.lambda)
+                  push!(parts,cmp_scalar(A.lambda[i],B.lambda[i]))
+                  push!(parts,cmp_matrix(A.vs[i],B.vs[i]))
+                  push!(parts,cmp_matrix(A.ws[i],B.ws[i]))
+              end
+              mergecmp(parts)
+          end
+
+          problem,_,_=three_point_spherical_codes(5,1//2,14,14;COMMON...,maxiterations=0)
+          s0=ClusteredLowRankSolver.ClusteredLowRankSDP(problem;prec=PREC)
+          s1=ClusteredLowRankSolver.convert_to_prec(s0,PREC)
+          s2=ClusteredLowRankSolver.convert_to_prec(s1,PREC)
+
+          parts=Any[]; key_sequences=0; key_sequence_mismatches=0
+          @assert size(s1.A)==size(s2.A)
+          for j in eachindex(s1.A), l in eachindex(s1.A[j]), r in axes(s1.A[j][l],1), s in axes(s1.A[j][l],2)
+              d1=s1.A[j][l][r,s]; d2=s2.A[j][l][r,s]
+              k1=collect(keys(d1)); k2=collect(keys(d2)); key_sequences+=1
+              key_sequence_mismatches += k1==k2 ? 0 : 1
+              @assert Set(k1)==Set(k2)
+              for p in sort(k1)
+                  push!(parts,cmp_lowrank(d1[p],d2[p]))
+              end
+          end
+          for j in eachindex(s1.B); push!(parts,cmp_matrix(s1.B[j],s2.B[j])); end
+          for j in eachindex(s1.c); push!(parts,cmp_matrix(s1.c[j],s2.c[j])); end
+          for j in eachindex(s1.C.blocks), l in eachindex(s1.C.blocks[j].blocks)
+              push!(parts,cmp_matrix(s1.C.blocks[j].blocks[l],s2.C.blocks[j].blocks[l]))
+          end
+          push!(parts,cmp_matrix(s1.b,s2.b))
+          push!(parts,cmp_scalar(s1.constant,s2.constant))
+          total=mergecmp(parts)
+          metadata_equal=(s1.maximize==s2.maximize && s1.matrix_coeff_names==s2.matrix_coeff_names &&
+            s1.free_coeff_names==s2.free_coeff_names && s1.matrix_coeff_blocks==s2.matrix_coeff_blocks &&
+            s1.order_c==s2.order_c)
+
+          # Independent comparator break.
+          s_bad=ClusteredLowRankSolver.convert_to_prec(s2,PREC)
+          delta=setprecision(BigFloat,PREC) do; BigFloat(2)^(-100); end
+          s_bad.b[1,1]+=delta
+          bad=cmp_matrix(s2.b,s_bad.b)
+          @assert bad.nonzero==1 && bad.maxdiff==delta
+
+          open("results/summary.tsv","w") do io
+              println(io,"status\tPASS")
+              println(io,"solver_commit\t09ac81aed031bdea714832cf515244f6eb223531")
+              println(io,"precision\t",PREC)
+              println(io,"numeric_entries\t",total.entries)
+              println(io,"numeric_nonzero\t",total.nonzero)
+              println(io,"numeric_maxdiff\t",total.maxdiff)
+              println(io,"key_sequences\t",key_sequences)
+              println(io,"key_sequence_mismatches\t",key_sequence_mismatches)
+              println(io,"metadata_equal\t",metadata_equal)
+              println(io,"idempotent_exact\t",total.nonzero==0 && key_sequence_mismatches==0 && metadata_equal)
+              println(io,"bad_delta\t",delta)
+              println(io,"bad_nonzero\t",bad.nonzero)
+          end
+          println("CONVERT_IDEMPOTENCE_COMPLETE")
+          JULIA
+          grep -q CONVERT_IDEMPOTENCE_COMPLETE results/solve.log
+          sha256sum results/* > results/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kissing5-convert-idempotence
+          path: results/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 9
