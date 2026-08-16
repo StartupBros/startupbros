@@ -1,0 +1,62 @@
+name: perfect-cuboid-missing-post25-14
+
+on:
+  push:
+    paths:
+      - '.github/workflows/perfect-cuboid-missing-post25-14.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        pair: ['26,21','26,23','26,25','27,22','27,26']
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PARI and eclib
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pari-gp pari-elldata eclib-tools
+      - name: Independent six-factor exact rank bounds
+        env:
+          PAIR: ${{ matrix.pair }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          python3 - <<'PY'
+          import os
+          m,n=map(int,os.environ['PAIR'].split(','))
+          a=m*m-n*n; b=2*m*n; A=a*a; B=b*b
+          c1=10*a*b; c2=20*a*b; c3=5*(a+b)**2
+          models=[
+            [0,A-B,0,-A*B,0],
+            [0,B-A,0,-A*B,0],
+            [0,A*A+B*B,0,A*A*B*B,0],
+            [0,A+B,0,A*B,0],
+            [0,-A-B,0,A*B,0],
+            [0,c1+c2+c3,0,c1*c2+c1*c3+c2*c3,c1*c2*c3],
+          ]
+          with open('/tmp/r.gp','w') as f:
+              f.write('default(parisizemax,8000000000);\n')
+              f.write(f'print("PAIR {m} {n} {a} {b} {m*m+n*n}");\n')
+              for i,model in enumerate(models,1):
+                  f.write(f'E=ellinit({model}); print("R {i} ",ellrank(E)," ROOT ",ellrootno(E)," TORS ",elltors(E));\n')
+              f.write('quit;\n')
+          PY
+          GP_COLORS='' gp -q -s 2000000000 /tmp/r.gp > results/pari.txt 2>&1
+          cat results/pari.txt
+          ! grep -Eq 'syntax error|incorrect type|at top-level|stack overflows|not a function' results/pari.txt
+          test "$(grep -c '^R ' results/pari.txt)" -eq 6
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perfect-cuboid-missing-${{ matrix.pair }}
+          path: results/
+          if-no-files-found: error
