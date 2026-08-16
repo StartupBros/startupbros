@@ -1,0 +1,253 @@
+name: kissing5-same-process-warmstart
+
+on:
+  push:
+    branches:
+      - kissing5-relay-20260814
+    paths:
+      - .github/workflows/kissing5-same-process-warmstart.yml
+  workflow_dispatch:
+
+jobs:
+  same-process-split:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      JULIA_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.12.6'
+
+      - name: Clone and instantiate fixed solver commit
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/nanleij/ClusteredLowRankSolver.jl.git clrs
+          git -C clrs checkout 09ac81aed031bdea714832cf515244f6eb223531
+          julia --project=clrs -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+
+      - name: Execute same-process 3 versus 2+1 warm-start collision
+        run: |
+          set -euxo pipefail
+          mkdir -p results
+          julia --project=clrs <<'JULIA' 2>&1 | tee results/solve.log
+          using Serialization, SHA, LinearAlgebra, Printf
+          include("clrs/examples/ThreePointBound.jl")
+          using .ThreePointBound, ClusteredLowRankSolver
+
+          const PREC = 192
+          const COMMON = (
+              prec=PREC,
+              matmul_prec=PREC,
+              preprocess=false,
+              duality_gap_threshold=big"1e-80",
+              dual_error_threshold=big"1e-80",
+              primal_error_threshold=big"1e-80",
+              omega_d=10^3,
+              omega_p=10^3,
+              step_length_threshold=big"1e-30",
+              verbose=true,
+          )
+
+          function compare_matrixvars(a, b)
+              @assert Set(keys(a)) == Set(keys(b))
+              maxdiff = BigFloat(0); nonzero = 0; entries = 0
+              firstdiff = nothing
+              for key in sort!(collect(keys(a)), by=string)
+                  A = Matrix(a[key]); B = Matrix(b[key]); @assert size(A) == size(B)
+                  for j in axes(A,2), i in axes(A,1)
+                      z = abs(BigFloat(A[i,j]) - BigFloat(B[i,j]))
+                      if z != 0
+                          nonzero += 1
+                          isnothing(firstdiff) && (firstdiff = (repr(key), i, j, string(A[i,j]), string(B[i,j]), string(z)))
+                      end
+                      maxdiff = max(maxdiff, z); entries += 1
+                  end
+              end
+              return maxdiff, nonzero, entries, firstdiff
+          end
+
+          function compare_dual(a, b)
+              md, mn, me, mf = compare_matrixvars(a.matrixvars, b.matrixvars)
+              @assert length(a.x) == length(b.x)
+              xd = BigFloat(0); xn = 0; xe = 0; xf = nothing
+              for j in eachindex(a.x)
+                  @assert length(a.x[j]) == length(b.x[j])
+                  for i in eachindex(a.x[j])
+                      z = abs(BigFloat(a.x[j][i]) - BigFloat(b.x[j][i]))
+                      if z != 0
+                          xn += 1
+                          isnothing(xf) && (xf = (j, i, string(a.x[j][i]), string(b.x[j][i]), string(z)))
+                      end
+                      xd = max(xd, z); xe += 1
+                  end
+              end
+              return (maxdiff=max(md,xd), nonzero=mn+xn, entries=me+xe,
+                      matrix_maxdiff=md, matrix_nonzero=mn, matrix_entries=me,
+                      x_maxdiff=xd, x_nonzero=xn, x_entries=xe,
+                      first_matrix_diff=mf, first_x_diff=xf)
+          end
+
+          function compare_primal(a, b)
+              md, mn, me, mf = compare_matrixvars(a.matrixvars, b.matrixvars)
+              @assert Set(keys(a.freevars)) == Set(keys(b.freevars))
+              fd = BigFloat(0); fn = 0; fe = 0; ff = nothing
+              for key in sort!(collect(keys(a.freevars)), by=string)
+                  z = abs(BigFloat(a.freevars[key]) - BigFloat(b.freevars[key]))
+                  if z != 0
+                      fn += 1
+                      isnothing(ff) && (ff = (repr(key), string(a.freevars[key]), string(b.freevars[key]), string(z)))
+                  end
+                  fd = max(fd, z); fe += 1
+              end
+              return (maxdiff=max(md,fd), nonzero=mn+fn, entries=me+fe,
+                      matrix_maxdiff=md, matrix_nonzero=mn, matrix_entries=me,
+                      free_maxdiff=fd, free_nonzero=fn, free_entries=fe,
+                      first_matrix_diff=mf, first_free_diff=ff)
+          end
+
+          function compare_pair(d1,p1,d2,p2)
+              dc = compare_dual(d1,d2); pc = compare_primal(p1,p2)
+              return (dual=dc, primal=pc,
+                      maxdiff=max(dc.maxdiff,pc.maxdiff),
+                      nonzero=dc.nonzero+pc.nonzero,
+                      entries=dc.entries+pc.entries)
+          end
+
+          function write_measurement(io, label, m)
+              vals = (m.mu,m.d_obj,m.p_obj,m.dual_gap,m.D_error,m.d_error,m.p_error,m.alpha_d,m.alpha_p,m.beta)
+              println(io, label, '\t', join(string.(vals), '\t'))
+          end
+
+          direct_measurements = Dict{Int,Any}()
+          direct_callback = function(m,d,p)
+              direct_measurements[m.iter] = m
+              if m.iter == 2
+                  serialize("results/q2.jls", (d,p))
+              elseif m.iter == 3
+                  serialize("results/q3_direct.jls", (d,p))
+              end
+          end
+
+          problem_direct, d_direct_return, p_direct_return = three_point_spherical_codes(
+              5, 1//2, 14, 14;
+              COMMON...,
+              maxiterations=3,
+              solution_callback=direct_callback)
+
+          @assert isfile("results/q2.jls") && isfile("results/q3_direct.jls")
+          d_q2, p_q2 = deserialize("results/q2.jls")
+          d_q3, p_q3 = deserialize("results/q3_direct.jls")
+          direct_return_cmp = compare_pair(d_q3,p_q3,d_direct_return,p_direct_return)
+          @assert direct_return_cmp.nonzero == 0
+
+          split_measurements = Dict{Int,Any}()
+          split_callback = function(m,d,p)
+              split_measurements[m.iter] = m
+              serialize("results/q3_split.jls", (d,p))
+          end
+          problem_split, d_split, p_split = three_point_spherical_codes(
+              5, 1//2, 14, 14;
+              COMMON...,
+              maxiterations=1,
+              dualsol=d_q2,
+              primalsol=p_q2,
+              solution_callback=split_callback)
+          @assert isfile("results/q3_split.jls")
+          d_split_cb,p_split_cb = deserialize("results/q3_split.jls")
+          @assert compare_pair(d_split,p_split,d_split_cb,p_split_cb).nonzero == 0
+
+          main_cmp = compare_pair(d_q3,p_q3,d_split,p_split)
+
+          # Independent adversarial control: perturb one warm-start coordinate,
+          # take the same one-step continuation, and require a changed output.
+          d_bad,p_bad = deserialize("results/q2.jls")
+          bad_key = first(sort!(collect(keys(d_bad.matrixvars)), by=string))
+          delta = setprecision(BigFloat, PREC) do
+              BigFloat(2)^(-100)
+          end
+          d_bad.matrixvars[bad_key][1,1] += delta
+          bad_measurements = Dict{Int,Any}()
+          bad_callback = function(m,d,p)
+              bad_measurements[m.iter] = m
+          end
+          problem_bad,d_bad_out,p_bad_out = three_point_spherical_codes(
+              5, 1//2, 14, 14;
+              COMMON...,
+              maxiterations=1,
+              dualsol=d_bad,
+              primalsol=p_bad,
+              solution_callback=bad_callback)
+          bad_cmp = compare_pair(d_q3,p_q3,d_bad_out,p_bad_out)
+          @assert bad_cmp.nonzero > 0
+
+          measurement_fields = (:mu,:d_obj,:p_obj,:dual_gap,:D_error,:d_error,:p_error,:alpha_d,:alpha_p,:beta)
+          measurement_diffs = Dict{String,String}()
+          for f in measurement_fields
+              measurement_diffs[string(f)] = string(abs(BigFloat(getproperty(direct_measurements[3],f)) - BigFloat(getproperty(split_measurements[1],f))))
+          end
+
+          direct_primal = objvalue(problem_direct,p_q3)
+          direct_dual = dualobjvalue(problem_direct,d_q3)
+          split_primal = objvalue(problem_split,p_split)
+          split_dual = dualobjvalue(problem_split,d_split)
+
+          open("results/summary.tsv","w") do io
+              println(io,"status\tPASS")
+              println(io,"solver_commit\t09ac81aed031bdea714832cf515244f6eb223531")
+              println(io,"precision\t",PREC)
+              println(io,"threads\t",Threads.nthreads())
+              println(io,"main_total_entries\t",main_cmp.entries)
+              println(io,"main_nonzero_differences\t",main_cmp.nonzero)
+              println(io,"main_max_difference\t",main_cmp.maxdiff)
+              println(io,"main_exact_equal\t",main_cmp.nonzero == 0)
+              println(io,"dual_matrix_entries\t",main_cmp.dual.matrix_entries)
+              println(io,"dual_x_entries\t",main_cmp.dual.x_entries)
+              println(io,"primal_matrix_entries\t",main_cmp.primal.matrix_entries)
+              println(io,"primal_free_entries\t",main_cmp.primal.free_entries)
+              println(io,"direct_primal_objective\t",direct_primal)
+              println(io,"split_primal_objective\t",split_primal)
+              println(io,"primal_objective_difference\t",abs(BigFloat(direct_primal)-BigFloat(split_primal)))
+              println(io,"direct_dual_objective\t",direct_dual)
+              println(io,"split_dual_objective\t",split_dual)
+              println(io,"dual_objective_difference\t",abs(BigFloat(direct_dual)-BigFloat(split_dual)))
+              println(io,"adversarial_key\t",repr(bad_key))
+              println(io,"adversarial_delta\t",delta)
+              println(io,"adversarial_nonzero_differences\t",bad_cmp.nonzero)
+              println(io,"adversarial_max_difference\t",bad_cmp.maxdiff)
+              println(io,"q2_sha256\t",bytes2hex(sha256(read("results/q2.jls"))))
+              println(io,"q3_direct_sha256\t",bytes2hex(sha256(read("results/q3_direct.jls"))))
+              println(io,"q3_split_sha256\t",bytes2hex(sha256(read("results/q3_split.jls"))))
+              for f in measurement_fields
+                  println(io,"measurement_diff_",f,"\t",measurement_diffs[string(f)])
+              end
+          end
+
+          open("results/comparison.json","w") do io
+              print(io, "{\n")
+              print(io, "  \"main_exact_equal\": ", main_cmp.nonzero == 0 ? "true" : "false", ",\n")
+              print(io, "  \"main_total_entries\": ", main_cmp.entries, ",\n")
+              print(io, "  \"main_nonzero_differences\": ", main_cmp.nonzero, ",\n")
+              print(io, "  \"main_max_difference\": \"", main_cmp.maxdiff, "\",\n")
+              print(io, "  \"adversarial_nonzero_differences\": ", bad_cmp.nonzero, ",\n")
+              print(io, "  \"adversarial_max_difference\": \"", bad_cmp.maxdiff, "\"\n")
+              print(io, "}\n")
+          end
+
+          println(read("results/summary.tsv",String))
+          println("SAME_PROCESS_WARMSTART_COMPLETE")
+          JULIA
+          grep -q SAME_PROCESS_WARMSTART_COMPLETE results/solve.log
+          sha256sum results/* > results/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kissing5-same-process-warmstart
+          path: results/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 9
