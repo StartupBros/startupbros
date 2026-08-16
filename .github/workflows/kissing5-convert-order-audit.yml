@@ -85,71 +85,74 @@ jobs:
               end
           end
 
-          problem,_,_=three_point_spherical_codes(5,1//2,14,14;COMMON...,maxiterations=0)
-          s0=ClusteredLowRankSolver.ClusteredLowRankSDP(problem;prec=PREC)
-          s1=ClusteredLowRankSolver.convert_to_prec(s0,PREC)
-          s2=ClusteredLowRankSolver.convert_to_prec(s1,PREC)
+          function main()
+              problem,_,_=three_point_spherical_codes(5,1//2,14,14;COMMON...,maxiterations=0)
+              s0=ClusteredLowRankSolver.ClusteredLowRankSDP(problem;prec=PREC)
+              s1=ClusteredLowRankSolver.convert_to_prec(s0,PREC)
+              s2=ClusteredLowRankSolver.convert_to_prec(s1,PREC)
 
-          parts=Any[]
-          dicts=0
-          key_sequence_mismatches=0
-          first_key_mismatch=nothing
-          type_mismatches=0
-          for j in eachindex(s1.A), l in eachindex(s1.A[j]), r in axes(s1.A[j][l],1), s in axes(s1.A[j][l],2)
-              d1=s1.A[j][l][r,s]; d2=s2.A[j][l][r,s]
-              k1=collect(keys(d1)); k2=collect(keys(d2)); dicts+=1
-              if k1 != k2
-                  key_sequence_mismatches+=1
-                  isnothing(first_key_mismatch) && (first_key_mismatch=(j,l,r,s,k1,k2))
+              parts=Any[]
+              dicts=0
+              key_sequence_mismatches=0
+              first_key_mismatch=nothing
+              type_mismatches=0
+              for j in eachindex(s1.A), l in eachindex(s1.A[j]), r in axes(s1.A[j][l],1), s in axes(s1.A[j][l],2)
+                  d1=s1.A[j][l][r,s]; d2=s2.A[j][l][r,s]
+                  k1=collect(keys(d1)); k2=collect(keys(d2)); dicts+=1
+                  if k1 != k2
+                      key_sequence_mismatches+=1
+                      isnothing(first_key_mismatch) && (first_key_mismatch=(j,l,r,s,k1,k2))
+                  end
+                  @assert Set(k1)==Set(k2)
+                  for p in sort(k1)
+                      type_mismatches += typeof(d1[p])==typeof(d2[p]) ? 0 : 1
+                      push!(parts,cmp_coeff(d1[p],d2[p]))
+                  end
               end
-              @assert Set(k1)==Set(k2)
-              for p in sort(k1)
-                  type_mismatches += typeof(d1[p])==typeof(d2[p]) ? 0 : 1
-                  push!(parts,cmp_coeff(d1[p],d2[p]))
+              for j in eachindex(s1.B); push!(parts,cmp_matrix(s1.B[j],s2.B[j])); end
+              for j in eachindex(s1.c); push!(parts,cmp_matrix(s1.c[j],s2.c[j])); end
+              for j in eachindex(s1.C.blocks), l in eachindex(s1.C.blocks[j].blocks)
+                  push!(parts,cmp_matrix(s1.C.blocks[j].blocks[l],s2.C.blocks[j].blocks[l]))
               end
-          end
-          for j in eachindex(s1.B); push!(parts,cmp_matrix(s1.B[j],s2.B[j])); end
-          for j in eachindex(s1.c); push!(parts,cmp_matrix(s1.c[j],s2.c[j])); end
-          for j in eachindex(s1.C.blocks), l in eachindex(s1.C.blocks[j].blocks)
-              push!(parts,cmp_matrix(s1.C.blocks[j].blocks[l],s2.C.blocks[j].blocks[l]))
-          end
-          push!(parts,cmp_matrix(s1.b,s2.b))
-          push!(parts,cmp_scalar(s1.constant,s2.constant))
-          total=mergecmp(parts)
+              push!(parts,cmp_matrix(s1.b,s2.b))
+              push!(parts,cmp_scalar(s1.constant,s2.constant))
+              total=mergecmp(parts)
 
-          metadata_equal=(s1.maximize==s2.maximize &&
-              s1.matrix_coeff_names==s2.matrix_coeff_names &&
-              s1.free_coeff_names==s2.free_coeff_names &&
-              s1.matrix_coeff_blocks==s2.matrix_coeff_blocks &&
-              s1.order_c==s2.order_c)
-          t1=ClusteredLowRankSolver.ThreadingInfo(s1)
-          t2=ClusteredLowRankSolver.ThreadingInfo(s2)
-          threading_equal=(t1.j_order==t2.j_order && t1.jl_order==t2.jl_order)
+              metadata_equal=(s1.maximize==s2.maximize &&
+                  s1.matrix_coeff_names==s2.matrix_coeff_names &&
+                  s1.free_coeff_names==s2.free_coeff_names &&
+                  s1.matrix_coeff_blocks==s2.matrix_coeff_blocks &&
+                  s1.order_c==s2.order_c)
+              t1=ClusteredLowRankSolver.ThreadingInfo(s1)
+              t2=ClusteredLowRankSolver.ThreadingInfo(s2)
+              threading_equal=(t1.j_order==t2.j_order && t1.jl_order==t2.jl_order)
 
-          # Independent comparator control: perturb one exact 192-bit coefficient.
-          s_bad=ClusteredLowRankSolver.convert_to_prec(s2,PREC)
-          delta=setprecision(BigFloat,PREC) do; BigFloat(2)^(-100); end
-          s_bad.b[1,1]+=delta
-          bad=cmp_matrix(s2.b,s_bad.b)
-          @assert bad.nonzero==1 && bad.maxdiff==delta
+              # Independent comparator control: perturb one exact 192-bit coefficient.
+              s_bad=ClusteredLowRankSolver.convert_to_prec(s2,PREC)
+              delta=setprecision(BigFloat,PREC) do; BigFloat(2)^(-100); end
+              s_bad.b[1,1]+=delta
+              bad=cmp_matrix(s2.b,s_bad.b)
+              @assert bad.nonzero==1 && bad.maxdiff==delta
 
-          open("results/summary.tsv","w") do io
-              println(io,"status\tPASS")
-              println(io,"solver_commit\t09ac81aed031bdea714832cf515244f6eb223531")
-              println(io,"precision\t",PREC)
-              println(io,"numeric_entries\t",total.entries)
-              println(io,"numeric_nonzero\t",total.nonzero)
-              println(io,"numeric_maxdiff\t",total.maxdiff)
-              println(io,"dicts\t",dicts)
-              println(io,"key_sequence_mismatches\t",key_sequence_mismatches)
-              println(io,"first_key_mismatch\t",repr(first_key_mismatch))
-              println(io,"type_mismatches\t",type_mismatches)
-              println(io,"metadata_equal\t",metadata_equal)
-              println(io,"threading_equal\t",threading_equal)
-              println(io,"bad_delta\t",delta)
-              println(io,"bad_nonzero\t",bad.nonzero)
+              open("results/summary.tsv","w") do io
+                  println(io,"status\tPASS")
+                  println(io,"solver_commit\t09ac81aed031bdea714832cf515244f6eb223531")
+                  println(io,"precision\t",PREC)
+                  println(io,"numeric_entries\t",total.entries)
+                  println(io,"numeric_nonzero\t",total.nonzero)
+                  println(io,"numeric_maxdiff\t",total.maxdiff)
+                  println(io,"dicts\t",dicts)
+                  println(io,"key_sequence_mismatches\t",key_sequence_mismatches)
+                  println(io,"first_key_mismatch\t",repr(first_key_mismatch))
+                  println(io,"type_mismatches\t",type_mismatches)
+                  println(io,"metadata_equal\t",metadata_equal)
+                  println(io,"threading_equal\t",threading_equal)
+                  println(io,"bad_delta\t",delta)
+                  println(io,"bad_nonzero\t",bad.nonzero)
+              end
+              println("CONVERT_ORDER_AUDIT_COMPLETE")
           end
-          println("CONVERT_ORDER_AUDIT_COMPLETE")
+          main()
           JULIA
           grep -q CONVERT_ORDER_AUDIT_COMPLETE results/solve.log
           sha256sum results/* > results/SHA256SUMS.txt
