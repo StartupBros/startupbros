@@ -1,0 +1,46 @@
+name: perfect-cuboid-23-22-target-ranks
+on:
+  push:
+    branches: [math/perfect-cuboid-23-22-two-cover]
+permissions:
+  contents: read
+jobs:
+  rank:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        model:
+          - '0,-12994090,0,21859785948025,0'
+          - '0,6575009540,0,5596892154988528900,0'
+          - '0,-12083290,0,26325570414025,0'
+          - '0,3057072370,0,1685073436631326225,0'
+          - '0,-2732400,0,207389160000,0'
+          - '0,13662000,0,5184729000000,0'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install eclib and PARI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y eclib-tools pari-gp pari-elldata
+      - name: Independent exact descents
+        env:
+          MODEL: ${{ matrix.model }}
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          echo "[$MODEL]" | mwrank -v 1 -p 100 > results/mwrank.txt 2>&1
+          cat results/mwrank.txt
+          ! grep -Eq 'syntax error|Segmentation|Aborted' results/mwrank.txt
+          cat > /tmp/r.gp <<GP
+          E=ellinit([$MODEL]); print("MODEL=",E[1..5]); print("RANK=",ellrank(E)); print("TORSION=",elltors(E)); print("ROOTNO=",ellrootno(E)); quit;
+          GP
+          GP_COLORS='' gp -q -s 500000000 /tmp/r.gp > results/pari.txt 2>&1
+          cat results/pari.txt
+          ! grep -Eq 'syntax error|incorrect type|at top-level|stack overflows' results/pari.txt
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perfect-cuboid-23-22-rank-${{ strategy.job-index }}
+          path: results/
+          if-no-files-found: error
