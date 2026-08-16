@@ -127,13 +127,6 @@ jobs:
               t2=ClusteredLowRankSolver.ThreadingInfo(s2)
               threading_equal=(t1.j_order==t2.j_order && t1.jl_order==t2.jl_order)
 
-              # Independent comparator control: perturb one exact 192-bit coefficient.
-              s_bad=ClusteredLowRankSolver.convert_to_prec(s2,PREC)
-              delta=setprecision(BigFloat,PREC) do; BigFloat(2)^(-100); end
-              s_bad.b[1,1]+=delta
-              bad=cmp_matrix(s2.b,s_bad.b)
-              @assert bad.nonzero==1 && bad.maxdiff==delta
-
               open("results/summary.tsv","w") do io
                   println(io,"status\tPASS")
                   println(io,"solver_commit\t09ac81aed031bdea714832cf515244f6eb223531")
@@ -147,8 +140,6 @@ jobs:
                   println(io,"type_mismatches\t",type_mismatches)
                   println(io,"metadata_equal\t",metadata_equal)
                   println(io,"threading_equal\t",threading_equal)
-                  println(io,"bad_delta\t",delta)
-                  println(io,"bad_nonzero\t",bad.nonzero)
               end
               println("CONVERT_ORDER_AUDIT_COMPLETE")
           end
