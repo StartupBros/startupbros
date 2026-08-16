@@ -1,0 +1,123 @@
+name: perfect-cuboid-25-14-target-lvalue
+
+on:
+  push:
+    paths:
+      - '.github/workflows/perfect-cuboid-25-14-target-lvalue.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PARI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pari-gp pari-elldata
+      - name: Directed central-value certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          cat > /tmp/gen.gp <<'GP'
+          E=ellinit([0,-18752410,0,11358281742025,0]);
+          M=2000000;
+          a=ellan(E,M);
+          write("results/an.gpvec",a);
+          print("LEN=",#a);
+          print("ROOTNO=",ellrootno(E));
+          print("GLOBALRED=",ellglobalred(E));
+          print("ANALYTIC=",ellanalyticrank(E));
+          print("RANK=",ellrank(E));
+          print("TORSION=",elltors(E));
+          quit;
+          GP
+          GP_COLORS='' gp -q -s 2000000000 /tmp/gen.gp > results/pari.txt 2>&1
+          cat results/pari.txt
+          grep -q '^LEN=2000000$' results/pari.txt
+          grep -q '^ROOTNO=1$' results/pari.txt
+          cat > /tmp/interval.py <<'PY'
+          import ast, hashlib, math, re
+          from decimal import Decimal, Context, localcontext, ROUND_FLOOR, ROUND_CEILING
+          from fractions import Fraction
+          from pathlib import Path
+
+          M=2000000
+          p=Path('results/an.gpvec')
+          aa=ast.literal_eval(p.read_text())
+          assert len(aa)==M
+          meta=Path('results/pari.txt').read_text()
+          N=int(re.search(r'GLOBALRED=\[(\d+),',meta).group(1))
+          sha=hashlib.sha256(p.read_bytes()).hexdigest()
+
+          pis='3.141592653589793238462643383279502884197169399375105820974944592307816406286208998628034825342117067982148086513282306647093844609550582231725359408128'
+          S10=10**150
+          pi_lo=Fraction(int(pis.replace('.','')),S10)
+          pi_hi=pi_lo+Fraction(1,S10)
+          S=10**170
+          sf=math.isqrt(N*S*S)
+          sqrt_lo=Fraction(sf,S)
+          sqrt_hi=Fraction(sf+1,S)
+          alpha_lo=2*pi_lo/sqrt_hi
+          alpha_hi=2*pi_hi/sqrt_lo
+
+          def alt_exp_neg(x,n):
+              t=Fraction(1); s=t
+              for j in range(1,n+1):
+                  t*=-x/Fraction(j)
+                  s+=t
+              return s
+
+          P=150
+          def cv(x,rounding):
+              with localcontext(Context(prec=P,rounding=rounding)):
+                  return Decimal(x.numerator)/Decimal(x.denominator)
+
+          # alpha is tiny; alternating truncations bracket exp(-alpha).
+          ratio_lo=cv(alt_exp_neg(alpha_hi,15),ROUND_FLOOR)
+          ratio_hi=cv(alt_exp_neg(alpha_lo,14),ROUND_CEILING)
+          dn=Context(prec=P,rounding=ROUND_FLOOR)
+          up=Context(prec=P,rounding=ROUND_CEILING)
+          pow_lo=pow_hi=Decimal(1)
+          sum_lo=sum_hi=Decimal(0)
+          for n,a in enumerate(aa,1):
+              pow_lo=dn.multiply(pow_lo,ratio_lo)
+              pow_hi=up.multiply(pow_hi,ratio_hi)
+              A=Decimal(a); nn=Decimal(n)
+              if a>=0:
+                  lo=dn.divide(dn.multiply(A,pow_lo),nn)
+                  hi=up.divide(up.multiply(A,pow_hi),nn)
+              else:
+                  lo=dn.divide(dn.multiply(A,pow_hi),nn)
+                  hi=up.divide(up.multiply(A,pow_lo),nn)
+              sum_lo=dn.add(sum_lo,lo)
+              sum_hi=up.add(sum_hi,hi)
+
+          tail=up.divide(
+              up.multiply(Decimal(4),up.multiply(pow_hi,ratio_hi)),
+              dn.subtract(Decimal(1),ratio_hi)
+          )
+          L_lo=dn.subtract(dn.multiply(Decimal(2),sum_lo),tail)
+          L_hi=up.add(up.multiply(Decimal(2),sum_hi),tail)
+          out=(
+              f'COEFF_SHA256={sha}\nM={M}\nN={N}\n'
+              f'RATIO_LOWER={ratio_lo}\nRATIO_UPPER={ratio_hi}\n'
+              f'TAIL_UPPER={tail}\nL_LOWER={L_lo}\nL_UPPER={L_hi}\n'
+              f'POSITIVE={L_lo>0}\n'
+          )
+          Path('results/interval.txt').write_text(out)
+          print(out,end='')
+          assert L_lo>0
+          PY
+          python3 /tmp/interval.py
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perfect-cuboid-25-14-target-lvalue
+          path: results/
+          if-no-files-found: error
