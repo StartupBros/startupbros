@@ -1,0 +1,60 @@
+name: perfect-cuboid-23-22-sage-kolyvagin
+
+on:
+  push:
+    branches: [math/perfect-cuboid-23-22-two-cover]
+  workflow_dispatch:
+
+jobs:
+  recover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SageMath
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y sagemath
+      - name: Recover exact Kolyvagin point and prove saturation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          cat > /tmp/recover.sage <<'SAGE'
+          proof.all(True)
+          E = EllipticCurve(QQ,[0,6575009540,0,5596892154988528900,0])
+          D = -479
+          print(f"MODEL={E.a_invariants()}")
+          print(f"CONDUCTOR={E.conductor()}")
+          print(f"ROOTNO={E.root_number()}")
+          print(f"HEEGNER_HYP={E.satisfies_heegner_hypothesis(D)}")
+          print(f"AUX_TWIST_RANK={E.quadratic_twist(D).rank(proof=True)}")
+          KP = E.kolyvagin_point(D)
+          P = KP.point_exact(prec=500)
+          print(f"KOLYVAGIN_EXACT={P}")
+          print(f"ON_CURVE={P in E}")
+          print(f"HEIGHT={P.height()}")
+          sat, idx, reg = E.saturation([P], verbose=True)
+          print(f"SAT_BASIS={sat}")
+          print(f"SAT_INDEX={idx}")
+          print(f"SAT_REGULATOR={reg}")
+          print(f"SAT_ON_CURVE={all(Q in E for Q in sat)}")
+          print(f"TORSION={E.torsion_subgroup()}")
+          print(f"HEEGNER_INDEX={KP.index()}")
+          assert E.satisfies_heegner_hypothesis(D)
+          assert E.quadratic_twist(D).rank(proof=True) == 0
+          assert P in E and len(sat)==1 and sat[0] in E
+          assert E.rank(proof=True)==1
+          SAGE
+          sage /tmp/recover.sage > results/sage.txt 2>&1
+          cat results/sage.txt
+          grep -q '^HEEGNER_HYP=True$' results/sage.txt
+          grep -q '^AUX_TWIST_RANK=0$' results/sage.txt
+          grep -q '^ON_CURVE=True$' results/sage.txt
+          grep -q '^SAT_ON_CURVE=True$' results/sage.txt
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perfect-cuboid-23-22-sage-kolyvagin
+          path: results/
+          if-no-files-found: error
