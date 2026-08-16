@@ -1,0 +1,285 @@
+name: kissing5-captured-sdp-mutation-audit
+
+on:
+  push:
+    branches:
+      - kissing5-relay-20260814
+    paths:
+      - .github/workflows/kissing5-captured-sdp-mutation-audit.yml
+  workflow_dispatch:
+
+jobs:
+  captured-sdp-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    env:
+      JULIA_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.12.6'
+
+      - name: Clone, patch, and instantiate fixed solver
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/nanleij/ClusteredLowRankSolver.jl.git clrs
+          git -C clrs checkout 09ac81aed031bdea714832cf515244f6eb223531
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('clrs/src/solver.jl')
+          text = p.read_text()
+          old_sig = '\ttesting=false, # print the times of the first two iterations. This is for testing purposes\n)'
+          new_sig = '\ttesting=false, # print the times of the first two iterations. This is for testing purposes\n    converted_sdp_callback=nothing,\n)'
+          assert text.count(old_sig) == 1, text.count(old_sig)
+          text = text.replace(old_sig, new_sig, 1)
+          old_conv = '    sdp = convert_to_prec(sdp, prec) #\n'
+          new_conv = '''    sdp = convert_to_prec(sdp, prec)\n    if !isnothing(converted_sdp_callback)\n        converted_sdp_callback(sdp)\n    end\n'''
+          assert text.count(old_conv) == 1, text.count(old_conv)
+          text = text.replace(old_conv, new_conv, 1)
+          p.write_text(text)
+          print('PATCH_APPLIED_CAPTURED_SDP_AUDIT')
+          PY
+          git -C clrs diff -- src/solver.jl | tee captured_sdp_audit.patch
+          julia --project=clrs -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+
+      - name: Audit captured object before and after three updates
+        run: |
+          set -euxo pipefail
+          mkdir -p results scratch
+          cp captured_sdp_audit.patch results/
+          cp .github/workflows/kissing5-captured-sdp-mutation-audit.yml results/workflow.yml
+          julia --project=clrs - <<'JULIA' > results/solve.log 2>&1
+          using SHA
+          using Arblib
+          include("clrs/examples/ThreePointBound.jl")
+          using .ThreePointBound, ClusteredLowRankSolver
+
+          const PREC=192
+          const COMMON=(
+              prec=PREC,
+              matmul_prec=PREC,
+              preprocess=false,
+              verbose=false,
+              duality_gap_threshold=big"1e-80",
+              dual_error_threshold=big"1e-80",
+              primal_error_threshold=big"1e-80",
+              omega_d=10^3,
+              omega_p=10^3,
+              step_length_threshold=big"1e-30",
+          )
+
+          function write_scalar(io, x)
+              setprecision(BigFloat, PREC) do
+                  print(io, repr(BigFloat(x)), '\n')
+              end
+          end
+
+          function write_matrix_values(io, A)
+              for i in eachindex(A)
+                  write_scalar(io, A[i])
+              end
+              length(A)
+          end
+
+          function canonical_alias!(io, classes::Dict{UInt,Int}, obj, label)
+              id=objectid(obj)
+              cls=get!(classes,id,length(classes)+1)
+              println(io,label,'\t',cls)
+          end
+
+          function write_snapshot(sdp, prefix)
+              values_path="scratch/$(prefix)_values.txt"
+              structure_path="scratch/$(prefix)_structure.txt"
+              alias_path="scratch/$(prefix)_alias.txt"
+              numeric_entries=0
+              dicts=0
+              alias_occurrences=0
+              alias_classes=Dict{UInt,Int}()
+              open(values_path,"w") do vio
+                  open(structure_path,"w") do sio
+                      open(alias_path,"w") do aio
+                          println(sio,"maximize\t",repr(sdp.maximize))
+                          println(sio,"matrix_coeff_names\t",repr(sdp.matrix_coeff_names))
+                          println(sio,"free_coeff_names\t",repr(sdp.free_coeff_names))
+                          println(sio,"matrix_coeff_blocks\t",repr(sdp.matrix_coeff_blocks))
+                          println(sio,"order_c\t",repr(sdp.order_c))
+                          for j in eachindex(sdp.A), l in eachindex(sdp.A[j]), r in axes(sdp.A[j][l],1), s in axes(sdp.A[j][l],2)
+                              d=sdp.A[j][l][r,s]
+                              ks=collect(keys(d)); dicts+=1
+                              println(sio,"dict\t",j,"\t",l,"\t",r,"\t",s,"\t",repr(ks))
+                              canonical_alias!(aio,alias_classes,d,"dict:$j:$l:$r:$s"); alias_occurrences+=1
+                              for p in sort(ks)
+                                  coeff=d[p]
+                                  println(sio,"coeff\t",j,"\t",l,"\t",r,"\t",s,"\t",p,"\t",string(typeof(coeff)))
+                                  if hasproperty(coeff,:lambda) && hasproperty(coeff,:vs) && hasproperty(coeff,:ws)
+                                      canonical_alias!(aio,alias_classes,coeff.lambda,"lambda_vec:$j:$l:$r:$s:$p"); alias_occurrences+=1
+                                      canonical_alias!(aio,alias_classes,coeff.vs,"vs_vec:$j:$l:$r:$s:$p"); alias_occurrences+=1
+                                      canonical_alias!(aio,alias_classes,coeff.ws,"ws_vec:$j:$l:$r:$s:$p"); alias_occurrences+=1
+                                      for i in eachindex(coeff.lambda)
+                                          write_scalar(vio,coeff.lambda[i]); numeric_entries+=1
+                                          canonical_alias!(aio,alias_classes,coeff.vs[i],"vs:$j:$l:$r:$s:$p:$i"); alias_occurrences+=1
+                                          canonical_alias!(aio,alias_classes,coeff.ws[i],"ws:$j:$l:$r:$s:$p:$i"); alias_occurrences+=1
+                                          numeric_entries += write_matrix_values(vio,coeff.vs[i])
+                                          numeric_entries += write_matrix_values(vio,coeff.ws[i])
+                                      end
+                                  else
+                                      canonical_alias!(aio,alias_classes,coeff,"dense:$j:$l:$r:$s:$p"); alias_occurrences+=1
+                                      numeric_entries += write_matrix_values(vio,coeff)
+                                  end
+                              end
+                          end
+                          for j in eachindex(sdp.B)
+                              canonical_alias!(aio,alias_classes,sdp.B[j],"B:$j"); alias_occurrences+=1
+                              numeric_entries += write_matrix_values(vio,sdp.B[j])
+                          end
+                          for j in eachindex(sdp.c)
+                              canonical_alias!(aio,alias_classes,sdp.c[j],"c:$j"); alias_occurrences+=1
+                              numeric_entries += write_matrix_values(vio,sdp.c[j])
+                          end
+                          for j in eachindex(sdp.C.blocks), l in eachindex(sdp.C.blocks[j].blocks)
+                              block=sdp.C.blocks[j].blocks[l]
+                              canonical_alias!(aio,alias_classes,block,"C:$j:$l"); alias_occurrences+=1
+                              numeric_entries += write_matrix_values(vio,block)
+                          end
+                          canonical_alias!(aio,alias_classes,sdp.b,"b"); alias_occurrences+=1
+                          numeric_entries += write_matrix_values(vio,sdp.b)
+                          write_scalar(vio,sdp.constant); numeric_entries+=1
+                          threading=ClusteredLowRankSolver.ThreadingInfo(sdp)
+                          println(sio,"threading_j\t",repr(threading.j_order))
+                          println(sio,"threading_jl\t",repr(threading.jl_order))
+                      end
+                  end
+              end
+              return (
+                  numeric_entries=numeric_entries,
+                  dicts=dicts,
+                  alias_occurrences=alias_occurrences,
+                  alias_classes=length(alias_classes),
+                  values_sha=bytes2hex(open(sha256,values_path)),
+                  structure_sha=bytes2hex(open(sha256,structure_path)),
+                  alias_sha=bytes2hex(open(sha256,alias_path)),
+              )
+          end
+
+          function first_lowrank(sdp)
+              for j in eachindex(sdp.A), l in eachindex(sdp.A[j]), r in axes(sdp.A[j][l],1), s in axes(sdp.A[j][l],2)
+                  d=sdp.A[j][l][r,s]
+                  for p in sort(collect(keys(d)))
+                      coeff=d[p]
+                      if hasproperty(coeff,:lambda) && !isempty(coeff.lambda)
+                          return coeff
+                      end
+                  end
+              end
+              error("No low-rank coefficient found")
+          end
+
+          function files_equal(a,b)
+              success(`cmp -s $a $b`)
+          end
+
+          function main()
+              problem,_,_=three_point_spherical_codes(5,1//2,14,14;COMMON...,maxiterations=0)
+              sdp_base=ClusteredLowRankSolver.ClusteredLowRankSDP(problem;prec=PREC)
+              threading_base=ClusteredLowRankSolver.ThreadingInfo(sdp_base)
+              captured=Ref{Any}()
+              before=Ref{Any}()
+              capture_cb=function(s)
+                  captured[]=s
+                  before[]=write_snapshot(s,"before")
+              end
+              result=ClusteredLowRankSolver.solvesdp(
+                  sdp_base,threading_base;
+                  COMMON...,
+                  maxiterations=3,
+                  converted_sdp_callback=capture_cb,
+              )
+              after=write_snapshot(captured[],"after")
+
+              values_equal=files_equal("scratch/before_values.txt","scratch/after_values.txt")
+              structure_equal=files_equal("scratch/before_structure.txt","scratch/after_structure.txt")
+              alias_equal=files_equal("scratch/before_alias.txt","scratch/after_alias.txt")
+
+              # Numerical adversary: change one exactly representable coefficient.
+              numeric_bad=ClusteredLowRankSolver.convert_to_prec(captured[],PREC)
+              coeff=first_lowrank(numeric_bad)
+              delta=setprecision(BigFloat,PREC) do; BigFloat(2)^(-100); end
+              coeff.lambda[1]=coeff.lambda[1]+Arb(delta,prec=PREC)
+              numeric_bad_snap=write_snapshot(numeric_bad,"numeric_bad")
+              numeric_bad_detected=!files_equal("scratch/after_values.txt","scratch/numeric_bad_values.txt")
+
+              # Alias adversary: merge two numerically equal factor objects.
+              alias_base=ClusteredLowRankSolver.convert_to_prec(captured[],PREC)
+              alias_base_snap=write_snapshot(alias_base,"alias_base")
+              alias_coeff=nothing
+              alias_index=0
+              for j in eachindex(alias_base.A), l in eachindex(alias_base.A[j]), r in axes(alias_base.A[j][l],1), s in axes(alias_base.A[j][l],2)
+                  d=alias_base.A[j][l][r,s]
+                  for p in sort(collect(keys(d)))
+                      c=d[p]
+                      if hasproperty(c,:lambda)
+                          for i in eachindex(c.vs)
+                              if c.vs[i] !== c.ws[i] && all(BigFloat(c.vs[i][k])==BigFloat(c.ws[i][k]) for k in eachindex(c.vs[i]))
+                                  alias_coeff=c; alias_index=i; break
+                              end
+                          end
+                      end
+                      alias_coeff===nothing || break
+                  end
+                  alias_coeff===nothing || break
+              end
+              alias_coeff===nothing && error("No equal nonaliased factor pair found")
+              alias_coeff.ws[alias_index]=alias_coeff.vs[alias_index]
+              alias_bad_snap=write_snapshot(alias_base,"alias_bad")
+              alias_values_equal=files_equal("scratch/alias_base_values.txt","scratch/alias_bad_values.txt")
+              alias_detected=!files_equal("scratch/alias_base_alias.txt","scratch/alias_bad_alias.txt")
+
+              @assert before[].numeric_entries==after.numeric_entries==5709290
+              @assert values_equal && structure_equal && alias_equal
+              @assert numeric_bad_detected
+              @assert alias_values_equal && alias_detected
+
+              open("results/summary.tsv","w") do io
+                  println(io,"status\tPASS")
+                  println(io,"solver_commit\t09ac81aed031bdea714832cf515244f6eb223531")
+                  println(io,"precision\t",PREC)
+                  println(io,"threads\t",Threads.nthreads())
+                  println(io,"numeric_entries\t",after.numeric_entries)
+                  println(io,"dicts\t",after.dicts)
+                  println(io,"alias_occurrences\t",after.alias_occurrences)
+                  println(io,"alias_classes\t",after.alias_classes)
+                  println(io,"values_equal\t",values_equal)
+                  println(io,"structure_equal\t",structure_equal)
+                  println(io,"alias_equal\t",alias_equal)
+                  println(io,"before_values_sha\t",before[].values_sha)
+                  println(io,"after_values_sha\t",after.values_sha)
+                  println(io,"before_structure_sha\t",before[].structure_sha)
+                  println(io,"after_structure_sha\t",after.structure_sha)
+                  println(io,"before_alias_sha\t",before[].alias_sha)
+                  println(io,"after_alias_sha\t",after.alias_sha)
+                  println(io,"numeric_bad_delta\t",delta)
+                  println(io,"numeric_bad_detected\t",numeric_bad_detected)
+                  println(io,"alias_bad_values_equal\t",alias_values_equal)
+                  println(io,"alias_bad_detected\t",alias_detected)
+                  println(io,"primal_objective\t",result.primalobj)
+                  println(io,"dual_objective\t",result.dualobj)
+              end
+              rm("scratch",recursive=true,force=true)
+              println("CAPTURED_SDP_MUTATION_AUDIT_COMPLETE")
+          end
+          main()
+          JULIA
+          grep -q CAPTURED_SDP_MUTATION_AUDIT_COMPLETE results/solve.log
+          sha256sum results/* > results/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kissing5-captured-sdp-mutation-audit
+          path: results/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 9
