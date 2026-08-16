@@ -1,0 +1,144 @@
+name: kissing5-convert-alias-audit
+
+on:
+  push:
+    branches:
+      - kissing5-relay-20260814
+    paths:
+      - .github/workflows/kissing5-convert-alias-audit.yml
+  workflow_dispatch:
+
+jobs:
+  conversion-alias-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      JULIA_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.12.6'
+      - name: Clone fixed solver
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/nanleij/ClusteredLowRankSolver.jl.git clrs
+          git -C clrs checkout 09ac81aed031bdea714832cf515244f6eb223531
+          julia --project=clrs -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+      - name: Compare alias topology across same-precision conversion
+        run: |
+          set -euxo pipefail
+          mkdir -p results
+          cp .github/workflows/kissing5-convert-alias-audit.yml results/workflow.yml
+          julia --project=clrs - <<'JULIA' > results/solve.log 2>&1
+          include("clrs/examples/ThreePointBound.jl")
+          using .ThreePointBound, ClusteredLowRankSolver
+
+          const PREC=192
+          const COMMON=(prec=PREC,matmul_prec=PREC,preprocess=false,verbose=false,
+            duality_gap_threshold=big"1e-80",dual_error_threshold=big"1e-80",
+            primal_error_threshold=big"1e-80",omega_d=10^3,omega_p=10^3,
+            step_length_threshold=big"1e-30")
+
+          function alias_signature(sdp)
+              classes=Dict{UInt,Int}(); sig=Int[]; labels=String[]
+              function add(obj,label)
+                  id=objectid(obj)
+                  cls=get!(classes,id,length(classes)+1)
+                  push!(sig,cls); push!(labels,label)
+              end
+              for j in eachindex(sdp.A), l in eachindex(sdp.A[j]), r in axes(sdp.A[j][l],1), s in axes(sdp.A[j][l],2)
+                  d=sdp.A[j][l][r,s]; add(d,"dict:$j:$l:$r:$s")
+                  for p in sort(collect(keys(d)))
+                      c=d[p]
+                      if hasproperty(c,:lambda) && hasproperty(c,:vs) && hasproperty(c,:ws)
+                          add(c.lambda,"lambda_vec:$j:$l:$r:$s:$p")
+                          add(c.vs,"vs_vec:$j:$l:$r:$s:$p")
+                          add(c.ws,"ws_vec:$j:$l:$r:$s:$p")
+                          for i in eachindex(c.lambda)
+                              add(c.vs[i],"vs:$j:$l:$r:$s:$p:$i")
+                              add(c.ws[i],"ws:$j:$l:$r:$s:$p:$i")
+                          end
+                      else
+                          add(c,"dense:$j:$l:$r:$s:$p")
+                      end
+                  end
+              end
+              for j in eachindex(sdp.B); add(sdp.B[j],"B:$j"); end
+              for j in eachindex(sdp.c); add(sdp.c[j],"c:$j"); end
+              for j in eachindex(sdp.C.blocks), l in eachindex(sdp.C.blocks[j].blocks)
+                  add(sdp.C.blocks[j].blocks[l],"C:$j:$l")
+              end
+              add(sdp.b,"b")
+              (sig=sig,labels=labels,classes=length(classes),occurrences=length(sig))
+          end
+
+          function same_values(A,B)
+              size(A)==size(B) && all(BigFloat(A[i])==BigFloat(B[i]) for i in eachindex(A))
+          end
+
+          function main()
+              problem,_,_=three_point_spherical_codes(5,1//2,14,14;COMMON...,maxiterations=0)
+              s0=ClusteredLowRankSolver.ClusteredLowRankSDP(problem;prec=PREC)
+              s1=ClusteredLowRankSolver.convert_to_prec(s0,PREC)
+              s2=ClusteredLowRankSolver.convert_to_prec(s1,PREC)
+              a1=alias_signature(s1); a2=alias_signature(s2)
+              @assert a1.labels==a2.labels
+              mismatches=findall(a1.sig .!= a2.sig)
+              first_mismatch=isempty(mismatches) ? nothing : (mismatches[1],a1.labels[mismatches[1]],a1.sig[mismatches[1]],a2.sig[mismatches[1]])
+
+              # Alias-only adversary: merge equal nonaliased factors.
+              s_bad=ClusteredLowRankSolver.convert_to_prec(s2,PREC)
+              before=alias_signature(s_bad)
+              changed=false
+              for j in eachindex(s_bad.A), l in eachindex(s_bad.A[j]), r in axes(s_bad.A[j][l],1), s in axes(s_bad.A[j][l],2)
+                  d=s_bad.A[j][l][r,s]
+                  for p in sort(collect(keys(d)))
+                      c=d[p]
+                      if hasproperty(c,:lambda)
+                          for i in eachindex(c.vs)
+                              if c.vs[i] !== c.ws[i] && same_values(c.vs[i],c.ws[i])
+                                  c.ws[i]=c.vs[i]
+                                  changed=true
+                                  break
+                              end
+                          end
+                      end
+                      changed && break
+                  end
+                  changed && break
+              end
+              @assert changed
+              after=alias_signature(s_bad)
+              alias_adversary_detected=before.sig!=after.sig
+              @assert alias_adversary_detected
+
+              open("results/summary.tsv","w") do io
+                  println(io,"status\tPASS")
+                  println(io,"solver_commit\t09ac81aed031bdea714832cf515244f6eb223531")
+                  println(io,"precision\t",PREC)
+                  println(io,"occurrences_s1\t",a1.occurrences)
+                  println(io,"occurrences_s2\t",a2.occurrences)
+                  println(io,"classes_s1\t",a1.classes)
+                  println(io,"classes_s2\t",a2.classes)
+                  println(io,"alias_mismatches\t",length(mismatches))
+                  println(io,"first_alias_mismatch\t",repr(first_mismatch))
+                  println(io,"alias_topology_equal\t",isempty(mismatches))
+                  println(io,"alias_adversary_detected\t",alias_adversary_detected)
+              end
+              println("CONVERT_ALIAS_AUDIT_COMPLETE")
+          end
+          main()
+          JULIA
+          grep -q CONVERT_ALIAS_AUDIT_COMPLETE results/solve.log
+          sha256sum results/* > results/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kissing5-convert-alias-audit
+          path: results/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 9
