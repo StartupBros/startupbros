@@ -1,0 +1,62 @@
+name: perfect-cuboid-23-22-factor-matrix
+on:
+  push:
+    branches: [math/perfect-cuboid-23-22-two-cover]
+permissions:
+  contents: read
+jobs:
+  factor:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [1,2,3]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Complete two-cover norm audit for one splitting field
+        env:
+          CASE: ${{ matrix.case }}
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          cat > /tmp/run.py <<'PY'
+          import html,os,re,requests
+          case=int(os.environ['CASE'])
+          cases={1:(506,1),2:(253,2),3:(5,3)}
+          d,idx=cases[case]
+          code=f'''
+          SetColumns(0);
+          Q:=Rationals(); Qx<x>:=PolynomialRing(Q);
+          fs:=[x^2+455400,x^2+910800,x^2+5586245];
+          f:=&*fs; C:=HyperellipticCurve(f);
+          Hk,AtoHk:=TwoCoverDescent(C);
+          print "COUNT",#Hk;
+          AA<theta>:=Domain(AtoHk);
+          L<a>:=NumberField(x^2+{d}); LX<X>:=PolynomialRing(L);
+          g:=&*[fs[j]: j in [1..3] | j ne {idx}];
+          LT<T>:=quo<LX|Evaluate(g,X)>;
+          j:=hom<AA->LT|T>;
+          print "FIELD",{d};
+          allsq:=true;
+          for h in Hk do
+            gam:=Norm(j(h@@AtoHk)); issq,rt:=IsSquare(gam);
+            print "GAMMA",gam,issq,rt;
+            allsq and:=issq;
+          end for;
+          print "ALLSQ",allsq;
+          '''
+          r=requests.post('https://magma.maths.usyd.edu.au/xml/calculator.xml',data={'input':code},timeout=90)
+          r.raise_for_status(); open('results/raw.xml','w').write(r.text)
+          if '<offline>' in r.text or '<warning>' in r.text: print(r.text); raise SystemExit('calculator unavailable')
+          lines=[html.unescape(x) for x in re.findall(r'<line>(.*?)</line>',r.text,flags=re.S)]
+          out='\n'.join(lines).strip()+'\n'; open('results/output.txt','w').write(out); print(out)
+          if 'Runtime error' in out or '>>' in out: raise SystemExit('Magma error')
+          if 'ALLSQ true' not in out: raise SystemExit('nonsquare or incomplete factor norm')
+          PY
+          python3 /tmp/run.py
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perfect-cuboid-23-22-factor-${{ matrix.case }}
+          path: results/
+          if-no-files-found: error
