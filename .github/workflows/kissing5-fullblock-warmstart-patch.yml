@@ -1,0 +1,249 @@
+name: kissing5-fullblock-warmstart-patch
+
+on:
+  push:
+    branches:
+      - kissing5-relay-20260814
+    paths:
+      - .github/workflows/kissing5-fullblock-warmstart-patch.yml
+  workflow_dispatch:
+
+jobs:
+  fullblock-collision:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    env:
+      JULIA_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.12.6'
+
+      - name: Clone, patch, and instantiate fixed solver
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/nanleij/ClusteredLowRankSolver.jl.git clrs
+          git -C clrs checkout 09ac81aed031bdea714832cf515244f6eb223531
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('clrs/src/solver.jl')
+          text = p.read_text()
+          old = 'for r in eachindex(sizes), s=1:r\n                    hs = 1+sum(sizes[1:r-1]):sum(sizes[1:r])'
+          new = 'for r in eachindex(sizes), s in eachindex(sizes)\n                    hs = 1+sum(sizes[1:r-1]):sum(sizes[1:r])'
+          assert text.count(old) == 1, text.count(old)
+          p.write_text(text.replace(old, new, 1))
+          print('PATCH_APPLIED_FULL_SUBBLOCK_RECONSTRUCTION')
+          PY
+          git -C clrs diff -- src/solver.jl | tee patch.diff
+          julia --project=clrs -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+
+      - name: Run direct, patched warm-start, and adversarial bug simulation
+        run: |
+          set -euxo pipefail
+          mkdir -p results
+          cp patch.diff results/
+          cp .github/workflows/kissing5-fullblock-warmstart-patch.yml results/workflow.yml
+          julia --project=clrs - <<'JULIA' > results/solve.log 2>&1
+          using Serialization, SHA
+          include("clrs/examples/ThreePointBound.jl")
+          using .ThreePointBound, ClusteredLowRankSolver
+
+          const PREC = 192
+          const KW = (
+              prec=PREC,
+              matmul_prec=PREC,
+              preprocess=false,
+              duality_gap_threshold=big"1e-80",
+              dual_error_threshold=big"1e-80",
+              primal_error_threshold=big"1e-80",
+              omega_d=10^3,
+              omega_p=10^3,
+              step_length_threshold=big"1e-30",
+              verbose=false,
+          )
+
+          function cmp_matrixvars(a, b)
+              @assert Set(keys(a)) == Set(keys(b))
+              entries = 0; nonzero = 0; maxdiff = BigFloat(0); firstdiff = nothing
+              for key in sort!(collect(keys(a)), by=string)
+                  A = Matrix(a[key]); B = Matrix(b[key]); @assert size(A) == size(B)
+                  for idx in eachindex(A)
+                      delta = abs(BigFloat(A[idx]) - BigFloat(B[idx]))
+                      entries += 1
+                      if delta != 0
+                          nonzero += 1
+                          isnothing(firstdiff) && (firstdiff = (repr(key), idx, string(A[idx]), string(B[idx]), string(delta)))
+                      end
+                      maxdiff = max(maxdiff, delta)
+                  end
+              end
+              return (entries=entries, nonzero=nonzero, maxdiff=maxdiff, first=firstdiff)
+          end
+
+          function cmp_pair(d1, p1, d2, p2)
+              dm = cmp_matrixvars(d1.matrixvars, d2.matrixvars)
+              pm = cmp_matrixvars(p1.matrixvars, p2.matrixvars)
+              @assert length(d1.x) == length(d2.x)
+              xe = 0; xn = 0; xd = BigFloat(0); xf = nothing
+              for j in eachindex(d1.x)
+                  @assert length(d1.x[j]) == length(d2.x[j])
+                  for i in eachindex(d1.x[j])
+                      delta = abs(BigFloat(d1.x[j][i]) - BigFloat(d2.x[j][i]))
+                      xe += 1
+                      if delta != 0
+                          xn += 1
+                          isnothing(xf) && (xf = (j, i, string(delta)))
+                      end
+                      xd = max(xd, delta)
+                  end
+              end
+              @assert Set(keys(p1.freevars)) == Set(keys(p2.freevars))
+              fe = 0; fn = 0; fd = BigFloat(0); ff = nothing
+              for key in sort!(collect(keys(p1.freevars)), by=string)
+                  delta = abs(BigFloat(p1.freevars[key]) - BigFloat(p2.freevars[key]))
+                  fe += 1
+                  if delta != 0
+                      fn += 1
+                      isnothing(ff) && (ff = (repr(key), string(delta)))
+                  end
+                  fd = max(fd, delta)
+              end
+              return (
+                  entries=dm.entries+pm.entries+xe+fe,
+                  nonzero=dm.nonzero+pm.nonzero+xn+fn,
+                  maxdiff=max(dm.maxdiff, pm.maxdiff, xd, fd),
+                  dual_matrix=dm,
+                  primal_matrix=pm,
+                  x_entries=xe,
+                  x_nonzero=xn,
+                  x_maxdiff=xd,
+                  free_entries=fe,
+                  free_nonzero=fn,
+                  free_maxdiff=fd,
+                  first_x=xf,
+                  first_free=ff,
+              )
+          end
+
+          direct_states = Dict{Int,Any}()
+          direct_measurements = Dict{Int,Any}()
+          direct_callback = function(m, d, p)
+              direct_measurements[m.iter] = m
+              if m.iter == 2 || m.iter == 3
+                  direct_states[m.iter] = (deepcopy(d), deepcopy(p))
+              end
+          end
+
+          problem_direct, d_return, p_return = three_point_spherical_codes(
+              5, 1//2, 14, 14;
+              KW...,
+              maxiterations=3,
+              solution_callback=direct_callback,
+          )
+          d2, p2 = direct_states[2]
+          d3, p3 = direct_states[3]
+          @assert cmp_pair(d3, p3, d_return, p_return).nonzero == 0
+
+          # Zero-step patched round-trip: reconstruct public q2 and return immediately.
+          problem_zero, d_zero, p_zero = three_point_spherical_codes(
+              5, 1//2, 14, 14;
+              KW...,
+              maxiterations=0,
+              dualsol=d2,
+              primalsol=p2,
+          )
+          zero_cmp = cmp_pair(d2, p2, d_zero, p_zero)
+
+          patched_measurements = Dict{Int,Any}()
+          patched_callback = function(m, d, p)
+              patched_measurements[m.iter] = m
+          end
+          problem_patched, d_patched, p_patched = three_point_spherical_codes(
+              5, 1//2, 14, 14;
+              KW...,
+              maxiterations=1,
+              dualsol=d2,
+              primalsol=p2,
+              solution_callback=patched_callback,
+          )
+          patched_cmp = cmp_pair(d3, p3, d_patched, p_patched)
+
+          # Adversarial simulation of the original lower-triangle-only warm start.
+          d_bug = deepcopy(d2); p_bug = deepcopy(p2)
+          zeroed_keys = 0; zeroed_entries = 0
+          for sol in (d_bug, p_bug)
+              for key in collect(keys(sol.matrixvars))
+                  if key isa ClusteredLowRankSolver.Block
+                      r, s = ClusteredLowRankSolver.subblock(key)
+                      if r < s
+                          M = sol.matrixvars[key]
+                          zeroed_keys += 1
+                          zeroed_entries += length(M)
+                          fill!(M, BigFloat(0))
+                      end
+                  end
+              end
+          end
+          bug_state_cmp = cmp_pair(d2, p2, d_bug, p_bug)
+          @assert bug_state_cmp.nonzero > 0
+          problem_bug, d_bug_out, p_bug_out = three_point_spherical_codes(
+              5, 1//2, 14, 14;
+              KW...,
+              maxiterations=1,
+              dualsol=d_bug,
+              primalsol=p_bug,
+          )
+          bug_step_cmp = cmp_pair(d3, p3, d_bug_out, p_bug_out)
+          @assert bug_step_cmp.nonzero > 0
+
+          fields = (:mu, :d_obj, :p_obj, :dual_gap, :D_error, :d_error, :p_error, :alpha_d, :alpha_p, :beta)
+          open("results/summary.tsv", "w") do io
+              println(io, "status\tPASS")
+              println(io, "solver_commit\t09ac81aed031bdea714832cf515244f6eb223531")
+              println(io, "precision\t", PREC)
+              println(io, "threads\t", Threads.nthreads())
+              println(io, "zero_roundtrip_entries\t", zero_cmp.entries)
+              println(io, "zero_roundtrip_nonzero\t", zero_cmp.nonzero)
+              println(io, "zero_roundtrip_maxdiff\t", zero_cmp.maxdiff)
+              println(io, "patched_step_entries\t", patched_cmp.entries)
+              println(io, "patched_step_nonzero\t", patched_cmp.nonzero)
+              println(io, "patched_step_maxdiff\t", patched_cmp.maxdiff)
+              println(io, "patched_exact_semigroup\t", patched_cmp.nonzero == 0)
+              println(io, "patched_primal_objective_difference\t", abs(BigFloat(objvalue(problem_direct,p3))-BigFloat(objvalue(problem_patched,p_patched))))
+              println(io, "patched_dual_objective_difference\t", abs(BigFloat(dualobjvalue(problem_direct,d3))-BigFloat(dualobjvalue(problem_patched,d_patched))))
+              println(io, "adversarial_zeroed_keys\t", zeroed_keys)
+              println(io, "adversarial_zeroed_entries\t", zeroed_entries)
+              println(io, "adversarial_state_nonzero\t", bug_state_cmp.nonzero)
+              println(io, "adversarial_step_nonzero\t", bug_step_cmp.nonzero)
+              println(io, "adversarial_step_maxdiff\t", bug_step_cmp.maxdiff)
+              for f in fields
+                  delta = abs(BigFloat(getproperty(direct_measurements[3], f)) - BigFloat(getproperty(patched_measurements[1], f)))
+                  println(io, "measurement_diff_", f, "\t", delta)
+              end
+          end
+
+          open("results/result.json", "w") do io
+              print(io, "{\n")
+              print(io, "  \"zero_roundtrip_exact\": ", zero_cmp.nonzero == 0 ? "true" : "false", ",\n")
+              print(io, "  \"patched_exact_semigroup\": ", patched_cmp.nonzero == 0 ? "true" : "false", ",\n")
+              print(io, "  \"patched_nonzero\": ", patched_cmp.nonzero, ",\n")
+              print(io, "  \"patched_maxdiff\": \"", patched_cmp.maxdiff, "\",\n")
+              print(io, "  \"adversarial_step_nonzero\": ", bug_step_cmp.nonzero, "\n")
+              print(io, "}\n")
+          end
+          println("FULLBLOCK_WARMSTART_PATCH_COMPLETE")
+          JULIA
+          grep -q FULLBLOCK_WARMSTART_PATCH_COMPLETE results/solve.log
+          sha256sum results/* > results/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kissing5-fullblock-warmstart-patch
+          path: results/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 9
