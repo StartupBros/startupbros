@@ -1,0 +1,48 @@
+name: perfect-cuboid-24-17-factor3-independent
+
+on:
+  push:
+    paths:
+      - '.github/workflows/perfect-cuboid-24-17-factor3-independent.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install exact arithmetic tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y eclib-tools pari-gp pari-elldata
+      - name: Independent exact rank and torsion verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          MODEL='0,-14051520,0,5484589286400,0'
+          echo "[$MODEL]" | mwrank -v 1 -p 1000 > results/mwrank.txt 2>&1
+          cat results/mwrank.txt
+          grep -Eq 'rank = 0|rank\(E\) = 0|0 <= rank <= 0|The rank and full Mordell-Weil basis have been determined unconditionally' results/mwrank.txt
+          cat > /tmp/check.gp <<'GP'
+          E=ellinit([0,-14051520,0,5484589286400,0]);
+          print("GLOBALRED=",ellglobalred(E));
+          print("ROOTNO=",ellrootno(E));
+          print("RANK=",ellrank(E));
+          print("TORSION=",elltors(E));
+          forprime(p=3,47,if(ellap(E,p)!=0 || p>2,print("AP ",p," ",ellap(E,p))));
+          quit;
+          GP
+          GP_COLORS='' gp -q /tmp/check.gp > results/pari.txt 2>&1
+          cat results/pari.txt
+          grep -q '^RANK=\[0, 0,' results/pari.txt
+          grep -q '^TORSION=\[2, \[2\]' results/pari.txt
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perfect-cuboid-24-17-factor3-independent
+          path: results/
+          if-no-files-found: error
