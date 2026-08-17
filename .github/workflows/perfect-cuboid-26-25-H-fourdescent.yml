@@ -1,0 +1,46 @@
+name: perfect-cuboid-26-25-H-fourdescent
+on:
+  push:
+    branches: [math/perfect-cuboid-23-22-two-cover]
+permissions:
+  contents: read
+jobs:
+  fourdescent:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Magma 2.29-9 four-descent
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          cat > /tmp/input.m <<'MAGMA'
+          SetColumns(0);
+          SetSeed(1);
+          E:=EllipticCurve([0,32526020,0,439569000000,0]);
+          print "ROOT",RootNumber(E);
+          print "RANK_BOUNDS",RankBounds(E);
+          S,mp:=TwoSelmerGroup(E);
+          print "SELMER_INVARIANTS",Invariants(S);
+          print "SELMER_ORDER",#S;
+          D:=FourDescent(E);
+          print "FOUR_COUNT",#D;
+          for i in [1..#D] do
+              print "FOUR_TYPE",i,Type(D[i]);
+          end for;
+          MAGMA
+          curl -fsS --retry 3 --max-time 90 \
+            -X POST \
+            --data-urlencode input@/tmp/input.m \
+            -d timeout=60 -d memory=1000 \
+            https://magma.maths.usyd.edu.au/xml/calculator.xml \
+            > results/magma.xml
+          cat results/magma.xml
+          grep -q 'SELMER_INVARIANTS' results/magma.xml
+          grep -q 'FOUR_COUNT' results/magma.xml
+          ! grep -q 'Runtime error' results/magma.xml
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perfect-cuboid-26-25-H-fourdescent
+          path: results/
+          if-no-files-found: error
