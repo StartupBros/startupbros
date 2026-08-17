@@ -1,0 +1,63 @@
+name: perfect-cuboid-26-25-two-cover
+on:
+  push:
+    branches: [math/perfect-cuboid-23-22-two-cover]
+permissions:
+  contents: read
+jobs:
+  cover:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Complete two-cover and all factor projections
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          cat > /tmp/run.py <<'PY'
+          import html,re,urllib.parse,urllib.request
+          code=r'''
+          SetColumns(0);
+          Q:=Rationals(); Qx<x>:=PolynomialRing(Q);
+          fs:=[x^2+663000,x^2+1326000,x^2+9126005];
+          C:=HyperellipticCurve(&*fs);
+          Hk,AtoHk:=TwoCoverDescent(C);
+          print "COVER_COUNT",#Hk;
+          AA<theta>:=Domain(AtoHk);
+          ds:=[6630,3315,5];
+          for idx in [1..3] do
+            L<a>:=NumberField(x^2+ds[idx]); LX<X>:=PolynomialRing(L);
+            g:=&*[fs[j]:j in [1..3]|j ne idx];
+            LT<T>:=quo<LX|Evaluate(g,X)>;
+            j:=hom<AA->LT|T>;
+            print "FACTOR",idx,"FIELD",ds[idx];
+            for h in Hk do
+              gam:=Norm(j(h@@AtoHk)); ok,rt:=IsSquare(gam);
+              print "GAMMA",gam,ok,rt;
+            end for;
+            A:=idx eq 1 select 1326000 else 663000;
+            B:=idx eq 3 select 1326000 else 9126005;
+            E:=EllipticCurve([0,-2*(A+B),0,(B-A)^2,0]);
+            lo,hi:=RankBounds(E);
+            print "TARGET",idx,A,B,lo,hi,RootNumber(E),AbelianInvariants(TorsionSubgroup(E));
+          end for;
+          '''
+          body=urllib.parse.urlencode({'input':code}).encode()
+          req=urllib.request.Request('https://magma.maths.usyd.edu.au/xml/calculator.xml',data=body,method='POST')
+          with urllib.request.urlopen(req,timeout=120) as r: raw=r.read().decode()
+          open('results/raw.xml','w').write(raw)
+          lines=[html.unescape(x) for x in re.findall(r'<line>(.*?)</line>',raw,flags=re.S)]
+          out='\n'.join(lines).strip()+'\n'
+          open('results/output.txt','w').write(out)
+          print(out)
+          if '<offline>' in raw or 'Runtime error' in out or 'User error' in out or '<warning>' in raw:
+              raise SystemExit('Magma failure')
+          if 'COVER_COUNT 2' not in out or out.count('GAMMA 1 true 1') != 6:
+              raise SystemExit('unexpected complete-cover data')
+          PY
+          python3 /tmp/run.py
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perfect-cuboid-26-25-two-cover
+          path: results/
+          if-no-files-found: error
