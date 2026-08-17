@@ -1,0 +1,86 @@
+name: perfect-cuboid-26-25-H-derivative
+on:
+  push:
+    branches: [math/perfect-cuboid-23-22-two-cover]
+permissions:
+  contents: read
+jobs:
+  derivative:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PARI and Arb bindings
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pari-gp pari-elldata python3-pip
+          python3 -m pip install --break-system-packages python-flint
+      - name: Rigorous derivative interval
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          cat > /tmp/gen.gp <<'GP'
+          E=ellinit([0,32526020,0,439569000000,0]);
+          M=1000000;
+          a=ellan(E,M);
+          write("results/an.gpvec",a);
+          print("LEN=",#a);
+          print("ROOTNO=",ellrootno(E));
+          print("GLOBALRED=",ellglobalred(E));
+          print("ANALYTIC=",ellanalyticrank(E));
+          print("RANK=",ellrank(E,1));
+          print("TORSION=",elltors(E));
+          quit;
+          GP
+          GP_COLORS='' gp -q -s 2000000000 /tmp/gen.gp > results/pari.txt 2>&1
+          cat results/pari.txt
+          grep -q '^LEN=1000000$' results/pari.txt
+          grep -q '^ROOTNO=-1$' results/pari.txt
+          cat > /tmp/interval.py <<'PY'
+          import ast, hashlib, re
+          from pathlib import Path
+          from flint import arb, ctx
+
+          ctx.prec = 180
+          M = 1_000_000
+          p = Path('results/an.gpvec')
+          aa = ast.literal_eval(p.read_text())
+          assert len(aa) == M
+          meta = Path('results/pari.txt').read_text()
+          N = int(re.search(r'GLOBALRED=\[(\d+),', meta).group(1))
+          sha = hashlib.sha256(p.read_bytes()).hexdigest()
+
+          alpha = 2 * arb.pi() / arb(N).sqrt()
+          total = arb(0)
+          for n, a in enumerate(aa, 1):
+              x = alpha * n
+              e1 = -(-x).ei()
+              total += arb(a) * e1 / n
+          partial = 2 * total
+
+          q = (-alpha).exp()
+          tail = 4 * (-(alpha * (M + 1))).exp() / (alpha * (M + 1) * (1 - q))
+          certified = partial + arb(0, tail.upper())
+
+          out = []
+          out.append(f'COEFF_SHA256={sha}')
+          out.append(f'M={M}')
+          out.append(f'N={N}')
+          out.append(f'ALPHA={alpha}')
+          out.append(f'PARTIAL={partial}')
+          out.append(f'TAIL_UPPER={tail.upper()}')
+          out.append(f'DERIVATIVE_INTERVAL={certified}')
+          out.append(f'LOWER={certified.lower()}')
+          out.append(f'UPPER={certified.upper()}')
+          positive = certified.lower() > 0
+          out.append(f'POSITIVE={positive}')
+          Path('results/derivative_interval.txt').write_text('\n'.join(out)+'\n')
+          print('\n'.join(out))
+          assert positive
+          PY
+          python3 /tmp/interval.py
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perfect-cuboid-26-25-H-derivative
+          path: results/
+          if-no-files-found: error
