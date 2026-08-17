@@ -1,0 +1,40 @@
+name: perfect-cuboid-26-25-pullback-rank
+on:
+  push:
+    branches: [math/perfect-cuboid-23-22-two-cover]
+permissions:
+  contents: read
+jobs:
+  rank:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install exact arithmetic tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pari-gp pari-elldata eclib-tools
+      - name: Exact pullback rank and torsion
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          echo '[0,32526020,0,439569000000,0]' | mwrank -v 1 -p 1000 > results/mwrank.txt 2>&1 || true
+          cat results/mwrank.txt
+          cat > /tmp/r.gp <<'GP'
+          default(parisizemax,8000000000);
+          E=ellinit([0,32526020,0,439569000000,0]);
+          print("GLOBALRED=",ellglobalred(E));
+          print("ROOTNO=",ellrootno(E));
+          print("ANALYTIC=",ellanalyticrank(E));
+          print("RANK=",ellrank(E,1));
+          print("TORSION=",elltors(E));
+          quit;
+          GP
+          GP_COLORS='' gp -q -s 2000000000 /tmp/r.gp > results/pari.txt 2>&1
+          cat results/pari.txt
+          ! grep -Eq 'syntax error|incorrect type|at top-level|stack overflows|not a function' results/pari.txt
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perfect-cuboid-26-25-pullback-rank
+          path: results/
+          if-no-files-found: error
