@@ -1,0 +1,43 @@
+name: perfect-cuboid-26-25-third-quotient
+on:
+  push:
+    branches: [math/perfect-cuboid-23-22-two-cover]
+permissions:
+  contents: read
+jobs:
+  certify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install exact arithmetic tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pari-gp pari-elldata eclib-tools
+      - name: Independent rank and basis
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          MODEL='0,3429364067190000,0,3915031886968540800275100000000,1487721293450586147825580283705025000000000000'
+          echo "[$MODEL]" | mwrank -v 1 -p 1000 > results/mwrank.txt 2>&1 || true
+          cat results/mwrank.txt
+          cat > /tmp/check.gp <<'GP'
+          default(parisizemax,8000000000);
+          E=ellinit([0,3429364067190000,0,3915031886968540800275100000000,1487721293450586147825580283705025000000000000]);
+          print("GLOBALRED=",ellglobalred(E));
+          print("ROOTNO=",ellrootno(E));
+          print("ANALYTIC=",ellanalyticrank(E));
+          print("RANK=",ellrank(E,1));
+          print("TORSION=",elltors(E));
+          quit;
+          GP
+          GP_COLORS='' gp -q -s 2000000000 /tmp/check.gp > results/pari.txt 2>&1
+          cat results/pari.txt
+          ! grep -Eq 'syntax error|incorrect type|at top-level|stack overflows|not a function' results/pari.txt
+          grep -q '^ROOTNO=-1$' results/pari.txt
+          grep -q '^RANK=\[1, 1,' results/pari.txt
+          sha256sum results/* > results/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perfect-cuboid-26-25-third-quotient
+          path: results/
+          if-no-files-found: error
