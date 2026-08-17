@@ -36,6 +36,14 @@ jobs:
       - name: Run deterministic step collision
         run: |
           set -euxo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('research/kissing5_deterministic_step_collision.jl')
+          text = p.read_text()
+          old = '@assert Set(keys(p1.freevars)) == Set(keys(p2.freevars)'
+          assert text.count(old) == 1, text.count(old)
+          p.write_text(text.replace(old, old + ')', 1))
+          PY
           mkdir -p results
           cp deterministic_step.patch results/
           cp research/patch_kissing5_deterministic_step.py results/
