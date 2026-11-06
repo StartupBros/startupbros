@@ -26,6 +26,7 @@ ORG = "https://github.com/StartupBros-com"
 STACK = f"{ORG}/hov-stack"
 PLUGS = f"{STACK}/tree/main/plugins"
 VIBERANK = "https://www.viberank.app/profile/StartupBros"
+PRBOT = "https://prbot.ai/"
 
 
 def pic(name, alt, width="100%"):
@@ -98,16 +99,18 @@ parts.append('<p align="center">\n' + "&nbsp;\n".join([
     pill("https://youtube.com/startupbros", "pill_yt", "YouTube, 34K subscribers"),
     pill("https://x.com/startupbros", "pill_x", "X, 16K followers"),
 ]) + "\n</p>")
-parts.append('<p align="center">I\'ve sold online since 2002. In 2012 I started StartupBros, one of the earliest Amazon FBA education companies, '
-             'and 9,000+ entrepreneurs have come through it. I\'ve built with AI full time since 2022. '
-             f'Today I run <a href="{utm(HOV, "readme-intro")}">House of Vibe</a>, where members with day jobs build real things with AI.</p>')
+parts.append('<p align="center">I build the products, workflows, evals and automations myself, 8 to 10 hours a day in Claude Code. '
+             'Recent builds: the House of Vibe platform (Stripe checkout, gated content, live events, Discord sync), '
+             f'<a href="{utm(PRBOT, "readme-intro")}">PRBot.ai</a> for getting press coverage, and the open source below.</p>')
+parts.append('<p align="center">I started StartupBros in 2012, one of the earliest Amazon FBA education companies. '
+             f'Today, at <a href="{utm(HOV, "readme-intro")}">House of Vibe</a>, members with day jobs build real things with AI.</p>')
 parts.append(block(utm(HOV, "readme-proof"), "proof",
                    "Track record: 20+ years building internet businesses. Co-author of Self-Made U. Spoke at Techstars Startup Week and "
                    "Global Sources Summit Hong Kong. 9,000+ entrepreneurs served through StartupBros. Helped grow Simply Organic to an "
                    "8-figure company, per an SEC filing. My Amazon ranking guide is footnote 353 in Lina Khan's Amazon's Antitrust Paradox, "
                    "in the Yale Law Journal. Quoted in The New York Times and Reuters."))
 parts.append('<p align="center">'
-             f'<a href="{utm(HOV, "readme-fork")}">{pic("fork_hov", "Do not code? Finish your first project before dinner. House of Vibe members build real things with AI around their day jobs, 10 to 15 hours a week. Build Your First Thing.", "421")}</a>'
+             f'<a href="{utm(HOV, "readme-fork")}">{pic("fork_hov", "Don't code? Finish your first project before dinner. House of Vibe members build real things with AI around their day jobs, 10 to 15 hours a week. Build Your First Thing.", "421")}</a>'
              f'<a href="{STACK}">{pic("fork_dev", "Write code? Get the Claude Code setup I run every day. hov-stack: the rules, guards and 13 plugins behind 4,302 merged PRs in 60 days. Free and MIT. Get hov-stack.", "421")}</a>'
              '</p>')
 parts.append(block(VIBERANK, "stack",
@@ -153,7 +156,7 @@ parts.append("""<details>
   - Quoted in The New York Times (2012) and Reuters (2013): [media kit](https://willmitchell.com/media-kit).
   - Co-author of Self-Made U (2013), with Kyle Eschenroeder.
   - Speaker at [Techstars Startup Week Tampa Bay](https://techstarsstartupweektampabay2018.sched.com/list/descriptions) (2018) and Global Sources Summit Hong Kong (2018 and 2019).
-  - Selling online since 2002 and building with AI full time since 2022: [about](https://willmitchell.com/about).
+  - Building businesses online since 2002, 8 to 10 hours a day in Claude Code, and building with AI since 2022: the founder section of [houseofvibe.ai](""" + utm(HOV, "readme-sources") + """). The House of Vibe platform's repo is private.
 - Leaderboards, read Nov 6, 2026. Each board counts only what was submitted to it, so totals differ.
   - [viberank](""" + VIBERANK + """): #1 all-time, with 520.0B Claude Code tokens logged, 93% of them cache reads.
   - [ccrank](https://ccrank.dev/leaderboard): #2 all-time, 295.1B tokens across Claude Code, Codex and other tools.

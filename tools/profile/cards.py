@@ -93,7 +93,7 @@ card("banner_m", 600, 640, """
 .eyebrow{font-size:19px;letter-spacing:.22em;gap:14px}.logo{width:28px;height:28px}
 h1{margin:20px 0 0;font-weight:800;font-size:49px;line-height:1.06;letter-spacing:-.03em;color:#fff}
 h1 br{display:none}
-.sub{position:absolute;left:40px;top:290px;width:270px;font-family:'DM Sans';font-size:25px;line-height:1.3;color:#d4d4d8}
+.sub{position:absolute;left:40px;top:290px;width:255px;font-family:'DM Sans';font-size:23px;line-height:1.32;color:#d4d4d8}
 .btn{position:absolute;left:40px;bottom:40px;height:66px;padding:0 30px;gap:12px;font-size:23px;z-index:2}
 .arr{width:21px;height:21px}
 .fade{position:absolute;left:0;right:0;bottom:0;height:170px;background:linear-gradient(to bottom,transparent,rgba(10,10,12,.85) 70%);z-index:1}
@@ -175,12 +175,12 @@ TILE_D = """
 .eyebrow{font-size:12px;gap:11px}.logo{width:17px;height:17px}
 h2{margin:13px 0 0;font-weight:800;font-size:34px;line-height:1.08;letter-spacing:-.026em;color:#fff}
 p{margin:9px 0 0;font-family:'DM Sans';font-size:17px;line-height:1.4;color:#b4b4bc}
-.tiles{margin-top:20px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-.t{background:#121118;border:1px solid #24212f;border-radius:12px;padding:13px 16px 12px}
+.tiles{margin-top:20px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.t{display:flex;flex-direction:column;background:#121118;border:1px solid #24212f;border-radius:12px;padding:13px 14px 12px}
 .r{font-weight:800;font-size:28px;letter-spacing:-.02em;color:#39ff14;text-shadow:0 0 14px rgba(57,255,20,.35);line-height:1}
-.s{font-family:'DM Sans';font-size:13.5px;color:#b4b4bc;margin-top:7px;white-space:nowrap}
-.b{font-family:'JetBrains Mono';font-weight:600;font-size:11.5px;letter-spacing:.08em;color:#e4e4e7;margin-top:6px;text-transform:uppercase}
-.foot{margin-top:14px;font-family:'JetBrains Mono';font-size:11px;color:#71717a}
+.s{font-family:'DM Sans';font-size:13px;color:#b4b4bc;margin-top:7px;white-space:nowrap}
+.b{font-family:'JetBrains Mono';font-weight:600;font-size:11.5px;letter-spacing:.08em;color:#e4e4e7;margin-top:auto;padding-top:6px;text-transform:uppercase}
+.foot{margin-top:14px;font-family:'JetBrains Mono';font-size:11.5px;color:#8b8b95}
 """
 TILE_M = """
 .card{width:600px;height:__H__px;border-radius:22px}
@@ -191,11 +191,11 @@ TILE_M = """
 h2{margin:18px 0 0;font-weight:800;font-size:46px;line-height:1.06;letter-spacing:-.03em;color:#fff}
 p{margin:14px 0 0;font-family:'DM Sans';font-size:24px;line-height:1.34;color:#b4b4bc}
 .tiles{margin-top:28px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.t{background:#121118;border:1px solid #24212f;border-radius:16px;padding:20px 22px 18px}
+.t{display:flex;flex-direction:column;background:#121118;border:1px solid #24212f;border-radius:16px;padding:20px 22px 18px}
 .r{font-weight:800;font-size:46px;letter-spacing:-.03em;color:#39ff14;text-shadow:0 0 16px rgba(57,255,20,.35);line-height:1}
-.s{font-family:'DM Sans';font-size:20px;color:#b4b4bc;margin-top:10px}
-.b{font-family:'JetBrains Mono';font-weight:600;font-size:17px;letter-spacing:.08em;color:#e4e4e7;margin-top:8px;text-transform:uppercase}
-.foot{margin-top:22px;font-family:'JetBrains Mono';font-size:16px;line-height:1.45;color:#71717a}
+.s{font-family:'DM Sans';font-size:20px;color:#b4b4bc;margin-top:10px;text-wrap:balance}
+.b{font-family:'JetBrains Mono';font-weight:600;font-size:17px;letter-spacing:.08em;color:#e4e4e7;margin-top:auto;padding-top:8px;text-transform:uppercase}
+.foot{margin-top:22px;font-family:'JetBrains Mono';font-size:16.5px;line-height:1.45;color:#8b8b95}
 """
 
 
@@ -215,15 +215,15 @@ tile_card("proof", "Track record",
           [("9,000+", "entrepreneurs served", "StartupBros"),
            ("8-figure", "helped grow Simply Organic", "SEC filing"),
            ("fn. 353", "cited by Lina Khan", "Yale Law Journal"),
-           ("Quoted", "NYT and Reuters", "Press")],
-          "Sources for every figure are in the fold at the bottom of this page", 300, 760)
+           ("Quoted", "in the NYT and Reuters", "Press")],
+          "Each figure's source is under Sources and read dates, at the bottom of this page", 300, 760)
 
 tile_card("stack", "Public Claude Code leaderboards",
-          '<span class="hl">#1 on viberank.</span> 520 billion tokens in Claude&nbsp;Code.',
-          "8 to 10 hours a day in Claude Code, on the setup below.",
+          '<span class="hl">#1 on viberank.</span> 520&nbsp;billion tokens in Claude&nbsp;Code.',
+          "Building with AI full time since 2022, on the setup below.",
           [("#1", "all-time", "viberank"), ("#2", "all-time", "ccrank"),
            ("#2", "last 30 days", "CCWarriors"), ("Top 2%", "all-time", "tokscale")],
-          "Read Nov 6, 2026 · token total from viberank · each board counts only what was submitted to it", 300, 720)
+          "Read Nov 6, 2026 · token total from viberank · each board counts only what was submitted to it", 300, 760)
 
 
 # ---------- House of Vibe pitch (the closing ask) ----------
