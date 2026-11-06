@@ -16,10 +16,10 @@
 
 <table align="center">
   <tr>
-    <td align="center" width="200"><h3>#4</h3><sub>all-time on viberank,<br>of about 1,400</sub></td>
-    <td align="center" width="200"><h3>520B</h3><sub>tokens through<br>Claude Code</sub></td>
-    <td align="center" width="200"><h3>30,000+</h3><sub>GitHub contributions<br>in the last year</sub></td>
-    <td align="center" width="200"><h3>7,000+</h3><sub>people through my<br>StartupBros programs</sub></td>
+    <td align="center" valign="top" width="200"><h3>#4</h3><sub>all-time on viberank,<br>of about 1,400</sub></td>
+    <td align="center" valign="top" width="200"><h3>520B</h3><sub>tokens through<br>Claude Code</sub></td>
+    <td align="center" valign="top" width="200"><h3>30,000+</h3><sub>GitHub contributions<br>in the last year</sub></td>
+    <td align="center" valign="top" width="200"><h3>7,000+</h3><sub>people through my<br>StartupBros programs</sub></td>
   </tr>
 </table>
 
@@ -69,7 +69,7 @@ Tested how-tos for building with Claude Code, measured before we publish.
 
 For people who don't code for a living and want to build with AI anyway. Guided projects you actually finish, a live workshop with me every month, and members building alongside you, on 10 to 15 hours a week. One payment, lifetime access, and the Open Door Guarantee: 30 days to try everything, full refund if it's not for you.
 
-<a href="https://houseofvibe.ai/?utm_source=github&utm_medium=profile&utm_campaign=readme-cta"><img src="assets/cta.png" width="300" alt="Build Your First Thing"></a>
+<a href="https://houseofvibe.ai/?utm_source=github&utm_medium=profile&utm_campaign=readme-cta"><img src="assets/cta.png" width="272" alt="Build Your First Thing"></a>
 
 Write code for a living? Send this page to the friend with a day job who keeps asking you about AI.
 
