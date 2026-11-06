@@ -14,7 +14,7 @@ python3 -I "$here/cards.py"
 
 rm -rf "$build/stage"
 mkdir -p "$build/stage"
-for n in banner fork_hov fork_dev stack pitch; do
+for n in banner proof fork_hov fork_dev stack pitch; do
   for v in d dk m mk; do cp "$build/out/${n}_${v}.png" "$build/stage/"; done
 done
 for n in pill_hov pill_notes pill_yt pill_x; do

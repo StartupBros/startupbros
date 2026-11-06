@@ -81,7 +81,7 @@ h1{margin:14px 0 0;font-weight:800;font-size:41px;line-height:1.06;letter-spacin
 .arr{width:16px;height:16px}
 """, f'<div class="card"><div class="grid"></div><div class="glow"></div><img class="photo" src="{PHOTO}">'
      f'<div class="text">{EB}<h1>{H1}</h1>'
-     f'<div class="sub">Founder of House of Vibe · building businesses online since 2002</div>{BTN}</div></div>',
+     f'<div class="sub">Founder of StartupBros and House of Vibe.<br>9,000+ entrepreneurs served since 2012.</div>{BTN}</div></div>',
      dark_extra=BANNER_DARK)
 
 card("banner_m", 600, 640, """
@@ -93,13 +93,13 @@ card("banner_m", 600, 640, """
 .eyebrow{font-size:19px;letter-spacing:.22em;gap:14px}.logo{width:28px;height:28px}
 h1{margin:20px 0 0;font-weight:800;font-size:49px;line-height:1.06;letter-spacing:-.03em;color:#fff}
 h1 br{display:none}
-.sub{position:absolute;left:40px;top:290px;width:270px;font-family:'DM Sans';font-size:25px;line-height:1.3;color:#d4d4d8}
+.sub{position:absolute;left:40px;top:290px;width:255px;font-family:'DM Sans';font-size:23px;line-height:1.32;color:#d4d4d8}
 .btn{position:absolute;left:40px;bottom:40px;height:66px;padding:0 30px;gap:12px;font-size:23px;z-index:2}
 .arr{width:21px;height:21px}
 .fade{position:absolute;left:0;right:0;bottom:0;height:170px;background:linear-gradient(to bottom,transparent,rgba(10,10,12,.85) 70%);z-index:1}
 """, f'<div class="card"><div class="grid"></div><div class="glow"></div><img class="photo" src="{PHOTO}"><div class="fade"></div>'
      f'<div class="text">{EB}<h1>{H1}</h1></div>'
-     f'<div class="sub">Founder of House of Vibe. Building businesses online since 2002.</div>{BTN}</div>',
+     f'<div class="sub">Founder of StartupBros and House of Vibe. 9,000+ entrepreneurs since 2012.</div>{BTN}</div>',
      dark_extra=BANNER_DARK)
 
 # ---------- link pills (monochrome; House of Vibe keeps the green mark) ----------
@@ -166,33 +166,24 @@ p{{margin:14px 0 0;font-family:'DM Sans';font-size:23px;line-height:1.36;color:#
 .arr{{width:19px;height:19px}}
 """, f'<div class="card">{inner}</div>')
 
-# ---------- leaderboards: the author's usage, not a claim about the repo ----------
-BOARDS = [("#2", "all-time", "ccrank"), ("#2", "last 30 days, of 82", "CCWarriors"),
-          ("#4", "all-time, of ~1,400", "viberank"), ("Top 2%", "#40 of 2,442", "tokscale")]
-tiles = "".join(f'<div class="t"><div class="r">{r}</div><div class="s">{s}</div><div class="b">{b}</div></div>' for r, s, b in BOARDS)
-STACK_BODY = (f'<div class="card"><div class="grid"></div><div class="glow"></div><div class="in">'
-              f'<div class="eyebrow">{LOGO}<span>Public Claude Code leaderboards</span></div>'
-              f'<h2><span class="hl">520 billion tokens</span> logged in Claude&nbsp;Code.</h2>'
-              f'<p>#2, #2 and #4 on three boards, and the top 2% on a fourth.</p>'
-              f'<div class="tiles">{tiles}</div>'
-              f'<div class="foot">Read Nov 6, 2026 · token total from viberank · each board counts only what was submitted to it</div></div></div>')
-card("stack_d", 900, 300, """
-.card{width:900px;height:300px}
+# ---------- tile cards: the track record, and the leaderboards (the author's usage, not a claim about the repo) ----------
+TILE_D = """
+.card{width:900px;height:__H__px}
 .grid{-webkit-mask-image:radial-gradient(ellipse 70% 90% at 15% 20%,#000 25%,transparent 80%)}
 .glow{position:absolute;right:-120px;top:-160px;width:560px;height:460px;background:radial-gradient(closest-side,rgba(57,255,20,.20),transparent 100%)}
 .in{position:absolute;inset:0;padding:28px 34px}
 .eyebrow{font-size:12px;gap:11px}.logo{width:17px;height:17px}
 h2{margin:13px 0 0;font-weight:800;font-size:34px;line-height:1.08;letter-spacing:-.026em;color:#fff}
 p{margin:9px 0 0;font-family:'DM Sans';font-size:17px;line-height:1.4;color:#b4b4bc}
-.tiles{margin-top:20px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-.t{background:#121118;border:1px solid #24212f;border-radius:12px;padding:13px 16px 12px}
+.tiles{margin-top:20px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.t{display:flex;flex-direction:column;background:#121118;border:1px solid #24212f;border-radius:12px;padding:13px 14px 12px}
 .r{font-weight:800;font-size:28px;letter-spacing:-.02em;color:#39ff14;text-shadow:0 0 14px rgba(57,255,20,.35);line-height:1}
-.s{font-family:'DM Sans';font-size:13.5px;color:#b4b4bc;margin-top:7px;white-space:nowrap}
-.b{font-family:'JetBrains Mono';font-weight:600;font-size:11.5px;letter-spacing:.08em;color:#e4e4e7;margin-top:6px;text-transform:uppercase}
-.foot{margin-top:14px;font-family:'JetBrains Mono';font-size:11px;color:#71717a}
-""", STACK_BODY)
-card("stack_m", 600, 720, """
-.card{width:600px;height:720px;border-radius:22px}
+.s{font-family:'DM Sans';font-size:13px;color:#b4b4bc;margin-top:7px;white-space:nowrap}
+.b{font-family:'JetBrains Mono';font-weight:600;font-size:11.5px;letter-spacing:.08em;color:#e4e4e7;margin-top:auto;padding-top:6px;text-transform:uppercase}
+.foot{margin-top:14px;font-family:'JetBrains Mono';font-size:11.5px;color:#8b8b95}
+"""
+TILE_M = """
+.card{width:600px;height:__H__px;border-radius:22px}
 .grid{-webkit-mask-image:radial-gradient(ellipse 90% 60% at 15% 15%,#000 25%,transparent 80%)}
 .glow{position:absolute;right:-160px;top:-180px;width:600px;height:560px;background:radial-gradient(closest-side,rgba(57,255,20,.20),transparent 100%)}
 .in{position:absolute;inset:0;padding:36px 36px}
@@ -200,12 +191,40 @@ card("stack_m", 600, 720, """
 h2{margin:18px 0 0;font-weight:800;font-size:46px;line-height:1.06;letter-spacing:-.03em;color:#fff}
 p{margin:14px 0 0;font-family:'DM Sans';font-size:24px;line-height:1.34;color:#b4b4bc}
 .tiles{margin-top:28px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.t{background:#121118;border:1px solid #24212f;border-radius:16px;padding:20px 22px 18px}
+.t{display:flex;flex-direction:column;background:#121118;border:1px solid #24212f;border-radius:16px;padding:20px 22px 18px}
 .r{font-weight:800;font-size:46px;letter-spacing:-.03em;color:#39ff14;text-shadow:0 0 16px rgba(57,255,20,.35);line-height:1}
-.s{font-family:'DM Sans';font-size:20px;color:#b4b4bc;margin-top:10px}
-.b{font-family:'JetBrains Mono';font-weight:600;font-size:17px;letter-spacing:.08em;color:#e4e4e7;margin-top:8px;text-transform:uppercase}
-.foot{margin-top:22px;font-family:'JetBrains Mono';font-size:16px;line-height:1.45;color:#71717a}
-""", STACK_BODY)
+.s{font-family:'DM Sans';font-size:20px;color:#b4b4bc;margin-top:10px;text-wrap:balance}
+.b{font-family:'JetBrains Mono';font-weight:600;font-size:17px;letter-spacing:.08em;color:#e4e4e7;margin-top:auto;padding-top:8px;text-transform:uppercase}
+.foot{margin-top:22px;font-family:'JetBrains Mono';font-size:16.5px;line-height:1.45;color:#8b8b95}
+"""
+
+
+def tile_card(name, eyebrow, h2, p, tiles, foot, h_d, h_m):
+    """A card with a headline, one line of copy and four stat tiles (big figure, small line, mono label)."""
+    cells = "".join(f'<div class="t"><div class="r">{r}</div><div class="s">{s}</div><div class="b">{b}</div></div>' for r, s, b in tiles)
+    body = (f'<div class="card"><div class="grid"></div><div class="glow"></div><div class="in">'
+            f'<div class="eyebrow">{LOGO}<span>{eyebrow}</span></div><h2>{h2}</h2><p>{p}</p>'
+            f'<div class="tiles">{cells}</div><div class="foot">{foot}</div></div></div>')
+    card(f"{name}_d", 900, h_d, TILE_D.replace("__H__", str(h_d)), body)
+    card(f"{name}_m", 600, h_m, TILE_M.replace("__H__", str(h_m)), body)
+
+
+tile_card("proof", "Track record",
+          '<span class="hl">20+ years</span> building internet&nbsp;businesses.',
+          "Co-author of Self-Made U. Spoke at Techstars Startup Week and Global Sources Summit Hong&nbsp;Kong.",
+          [("9,000+", "entrepreneurs served", "StartupBros"),
+           ("8-figure", "helped grow Simply Organic", "SEC filing"),
+           ("fn. 353", "cited by Lina Khan", "Yale Law Journal"),
+           ("Quoted", "in the NYT and Reuters", "Press")],
+          "Each figure's source is under Sources and read dates, at the bottom of this page", 300, 760)
+
+tile_card("stack", "Public Claude Code leaderboards",
+          '<span class="hl">#1 on viberank.</span> 520&nbsp;billion tokens in Claude&nbsp;Code.',
+          "Building with AI full time since 2022, on the setup below.",
+          [("#1", "all-time", "viberank"), ("#2", "all-time", "ccrank"),
+           ("#2", "last 30 days", "CCWarriors"), ("Top 2%", "all-time", "tokscale")],
+          "Read Nov 6, 2026 · token total from viberank · each board counts only what was submitted to it", 300, 760)
+
 
 # ---------- House of Vibe pitch (the closing ask) ----------
 FEATS = [("Day 1", "Watch it build something real before dinner."),
