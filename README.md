@@ -1,61 +1,101 @@
-### I'm Will. I build with AI all day, and I run [House of Vibe](https://houseofvibe.ai/?utm_source=github&utm_medium=profile&utm_campaign=readme-top).
+<a href="https://houseofvibe.ai/?utm_source=github&utm_medium=profile&utm_campaign=readme-banner"><img src="assets/banner.png" width="100%" alt="Will Mitchell. Helping people with day jobs build real things with AI. Founder of House of Vibe, building businesses online since 2002."></a>
 
-**Don't code?** [House of Vibe](https://houseofvibe.ai/?utm_source=github&utm_medium=profile&utm_campaign=readme-router) is where people with day jobs build real things with AI. **Do code?** My free Claude Code tools are below.
+<p align="center">
+  <a href="https://houseofvibe.ai/?utm_source=github&utm_medium=profile&utm_campaign=readme-links"><b>houseofvibe.ai</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="https://houseofvibe.ai/blog?utm_source=github&utm_medium=profile&utm_campaign=readme-links">House Notes</a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="https://github.com/StartupBros-com/hov-stack">hov-stack</a>
+  <br>
+  <sub><a href="https://x.com/startupbros">X (16K)</a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="https://youtube.com/startupbros">YouTube</a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="https://www.linkedin.com/in/willmitchell/">LinkedIn</a></sub>
+</p>
 
-I'm a marketer, not a career engineer. I've been building businesses online since 2002, over 7,000 people have come through my StartupBros programs, and these days I spend 8 to 10 hours a day in Claude Code, with Codex alongside.
+<table align="center">
+  <tr>
+    <td align="center" valign="top"><h3>7,000+</h3><sub>people through<br>StartupBros</sub></td>
+    <td align="center" valign="top"><h3>#4</h3><sub>all-time on<br>viberank</sub></td>
+    <td align="center" valign="top"><h3>13</h3><sub>free Claude<br>Code plugins</sub></td>
+  </tr>
+</table>
 
-## Free Claude Code plugins
+<p align="center">
+  <b>Don't code?</b> House of Vibe is where people with day jobs build real things with AI.
+  <br><br>
+  <a href="https://houseofvibe.ai/?utm_source=github&utm_medium=profile&utm_campaign=readme-top"><img src="assets/cta.png" width="272" alt="Build Your First Thing"></a>
+  <br><br>
+  <b>Write code?</b> The Claude Code setup I work in is free, just below.
+</p>
 
-**[hov-stack](https://github.com/StartupBros-com/hov-stack)** is the Claude Code setup I work in every day: the rules, the guards, the permission lists and a 13-plugin marketplace. To try one plugin, run these two lines in Claude Code:
+### The setup I build with, free
+
+[**hov-stack**](https://github.com/StartupBros-com/hov-stack) is everything I run Claude Code with: the rules, the guards, the permission lists and the skills, plus a 13-plugin marketplace. The permission lists alone hold 292 allow, 75 ask and 70 deny entries, grown from real refusals.
+
+Add the marketplace once, then install any plugin by name:
 
 ```
 /plugin marketplace add StartupBros-com/hov-stack
 /plugin install memory-dream@hov
 ```
 
-Each plugin is plain files and hooks in the repo, so read it before you install. You can also fork the whole setup for its rules and permission lists.
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="https://github.com/StartupBros-com/hov-stack/tree/main/plugins/memory-dream"><b>memory-dream</b></a><br>
+      Finds stale and conflicting notes in Claude Code's auto-memory, shows you a diff for each fix, and applies only what you approve.
+    </td>
+    <td width="50%" valign="top">
+      <a href="https://github.com/StartupBros-com/hov-stack/tree/main/plugins/token-eater"><b>token-eater</b></a><br>
+      Puts AI credits that are about to expire to work: it tidies up your code in an isolated copy, checks nothing broke, and opens a draft pull request. It never merges.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="https://github.com/StartupBros-com/hov-stack/tree/main/plugins/papercut"><b>papercut</b></a><br>
+      Records the small failures your agents route around silently and turns them into ranked, tracked fixes.
+    </td>
+    <td width="50%" valign="top">
+      <a href="https://github.com/StartupBros-com/hov-stack/tree/main/plugins/skill-tuner"><b>skill-tuner</b></a><br>
+      Tells you whether an edit to a SKILL.md, AGENTS.md or CLAUDE.md actually worked, with an interval instead of a single number.
+    </td>
+  </tr>
+</table>
 
-- **[memory-dream](https://github.com/StartupBros-com/hov-stack/tree/main/plugins/memory-dream)**: finds stale and conflicting notes in Claude Code's auto-memory, shows you a diff for each fix, applies only what you approve, then measures whether recall improved.
-- **[token-eater](https://github.com/StartupBros-com/hov-stack/tree/main/plugins/token-eater)**: got AI credits about to expire? It tidies up your code in an isolated copy, checks nothing broke, and opens a draft pull request. It never merges.
-- **[papercut](https://github.com/StartupBros-com/hov-stack/tree/main/plugins/papercut)**: records the small failures your agents route around silently and turns them into ranked, tracked fixes.
-- **[skill-tuner](https://github.com/StartupBros-com/hov-stack/tree/main/plugins/skill-tuner)**: tells you whether an edit to a SKILL.md, AGENTS.md or CLAUDE.md actually worked, with an interval instead of a single number.
+Each plugin is plain files and hooks, so read it before you install. [Browse all 13 plugins](https://github.com/StartupBros-com/hov-stack/tree/main/plugins).
 
-## Other free tools
+### From House Notes
 
-- **[synthetic-panel](https://github.com/StartupBros-com/synthetic-panel)**: scores headlines and offers against a panel of AI customer personas. The scoring runs locally, with no API key.
-- **[renpho-mcp-server](https://github.com/StartupBros-com/renpho-mcp-server)**: an MCP server that gives your AI assistant the body-composition data from your Renpho scale.
+Tested how-tos from the House of Vibe blog, measured before I publish them. [Read them all](https://houseofvibe.ai/blog?utm_source=github&utm_medium=profile&utm_campaign=readme-notes).
 
-## Receipts
+- [**ChatGPT Plus vs Claude Pro: which plan to keep if you don't code**](https://houseofvibe.ai/blog/chatgpt-plus-vs-claude-pro?utm_source=github&utm_medium=profile&utm_campaign=readme-notes)<br><sub>Both finished our four everyday jobs. ChatGPT passed all 20 checks first time, Claude 17.</sub>
+- [**Find the Claude Code memories your MEMORY.md no longer reaches**](https://houseofvibe.ai/blog/claude-code-auto-memory?utm_source=github&utm_medium=profile&utm_campaign=readme-notes)<br><sub>Across 16 questions about our project's past, the agent reached for 11 memory files that don't exist.</sub>
+- [**Cloudflare's new CLI or plain curl for your coding agent**](https://houseofvibe.ai/blog/cloudflare-cli-or-curl-for-coding-agents?utm_source=github&utm_medium=profile&utm_campaign=readme-notes)<br><sub>Across 48 runs of the same 12 jobs, curl and the API went 24 of 24. The CLI went 20 of 24 and called --help 76 times.</sub>
+
+### House of Vibe
+
+For people who don't code for a living and want to build with AI anyway. Projects you build, not courses you watch. I've built and sold companies, and I'm not teaching from a stage: I build inside the House every day, alongside the members.
+
+- **Finish your first project before dinner**, then follow a recommended path through the project library.
+- **Built for people with day jobs.** It runs on 10 to 15 hours a week, evenings and weekends.
+- **Live workshops every month**, and a House full of people building alongside you.
+- **One payment, lifetime access.** No recurring fees.
+
+<a href="https://houseofvibe.ai/?utm_source=github&utm_medium=profile&utm_campaign=readme-cta"><img src="assets/cta.png" width="272" alt="Build Your First Thing"></a>
+
+<sub>The Open Door Guarantee: 30 days to try everything. Full refund if it's not for you.</sub>
+
+Know someone with a day job who keeps asking you about AI? Send them to [houseofvibe.ai](https://houseofvibe.ai/?utm_source=github&utm_medium=profile&utm_campaign=readme-share).
+
+<details>
+<summary><sub>Where the numbers come from</sub></summary>
+
+<br>
 
 [![viberank](https://www.viberank.app/api/badge/StartupBros)](https://www.viberank.app/profile/StartupBros)
 
-#4 all-time of about 1,400 developers on viberank, #2 on CCWarriors' 30-day board, and #2 all-time on ccrank, read Nov 5, 2026.
-
-4,302 pull requests merged across 17 repos in the 60 days to Oct 19, 2026, most of them in private repos. hov-stack is the setup behind them.
-
-<details>
-<summary>Where these numbers come from</summary>
-
-- viberank: #4 all-time out of about 1,400 developers, 520.0B tokens. [Profile](https://www.viberank.app/profile/StartupBros).
-- CCWarriors: #2 of 82 on the 30-day board. [Profile](https://ccwarriors.xyz/StartupBros).
-- ccrank: #2 on the all-time tokens board with 295.1B tokens, listed as Will Mitchell, last synced about a month ago. [Board](https://ccrank.dev/leaderboard).
-- tokscale: #40 of 2,442 all-time, 479.8B tokens. [Profile](https://tokscale.ai/u/startupbros).
-- Each board counts only what was submitted to it, so token totals differ from board to board. Most of the tokens are cache reads (viberank shows a 93% cache hit rate). The boards' dollar figures are estimates at API prices.
-- Pull requests: the count in the [hov-stack README](https://github.com/StartupBros-com/hov-stack). A public GitHub search shows fewer, because most are in private repos.
-- Side project: my agents entered the [Muse Spark Open Kernel Challenge](https://openkernelchallenge.dev), a GPU kernel contest. At the Nov 5 kernel close we stood 121st of 2,014 overall, before the organizers' reruns. Most of that placing comes from public kernels we built on or submitted unchanged. Where we measured our own changes, they added about 1 to 2 percent.
+- viberank: #4 all-time out of about 1,400, with 520.0B tokens logged, 93% of them cache reads. Read Nov 5, 2026. [Profile](https://www.viberank.app/profile/StartupBros).
+- Other boards the same day: #2 of 82 on [CCWarriors](https://ccwarriors.xyz/StartupBros)' 30-day board, #2 all-time on [ccrank](https://ccrank.dev/leaderboard) (295.1B), #40 of 2,442 on [tokscale](https://tokscale.ai/u/startupbros) (479.8B). Each board counts only what was submitted to it, so totals differ.
+- 7,000+ people: "Over 7,000 people have come through my StartupBros programs," as stated on [houseofvibe.ai](https://houseofvibe.ai/?utm_source=github&utm_medium=profile&utm_campaign=readme-sources).
+- hov-stack: 13 plugins in its marketplace, MIT licensed. Its [README](https://github.com/StartupBros-com/hov-stack) reports 4,302 pull requests merged across 17 repos in the 60 days to Oct 19, 2026.
+- X: 16,293 followers on Nov 5, 2026.
 
 </details>
 
-## House of Vibe
-
-AI changed who gets to build, and most people haven't noticed yet. If you don't code for a living and want to build with AI anyway, [House of Vibe](https://houseofvibe.ai/?utm_source=github&utm_medium=profile&utm_campaign=readme-body) is for you. No hype. No gurus. Just real people building with AI: guided projects you actually finish, a live workshop with me every month, and members building alongside you. It runs on 10 to 15 hours a week, around a day job. One payment, lifetime access, and the Open Door Guarantee: 30 days to try everything, full refund if it's not for you.
-
-**[Build Your First Thing](https://houseofvibe.ai/?utm_source=github&utm_medium=profile&utm_campaign=readme-cta)**
-
-Not ready to join? [House Notes](https://houseofvibe.ai/blog?utm_source=github&utm_medium=profile&utm_campaign=readme-notes) has free, tested how-tos for building with Claude Code.
-
-Already write code for a living? The House isn't built for you. If someone with a day job keeps asking you about AI, send them this page.
-
 ---
 
-Want me building inside your team instead? I take fractional AI co-founder work: [willmitchell.com](https://willmitchell.com/?utm_source=github&utm_medium=profile&utm_campaign=readme-footer)
+<sub>Want me building inside your team instead? I take on fractional AI co-founder work: [willmitchell.com](https://willmitchell.com/?utm_source=github&utm_medium=profile&utm_campaign=readme-footer)</sub>
