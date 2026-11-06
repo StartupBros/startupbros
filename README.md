@@ -63,9 +63,10 @@ Or from inside Claude Code: `/plugin marketplace add StartupBros-com/hov-stack`.
 
 <table>
 <tr><th>Repo</th><th>What it does</th></tr>
+<tr><td nowrap><a href="https://github.com/StartupBros/hov-router"><b>hov-router</b></a></td><td>Use all your AI accounts from one place, and see which account handled each request, with usage, costs and errors in a dashboard.</td></tr>
 <tr><td nowrap><a href="https://github.com/StartupBros-com/renpho-mcp-server"><b>renpho-mcp-server</b></a></td><td>Ask Claude, Cursor or any MCP client about your weight, body fat and muscle mass from a Renpho smart scale.</td></tr>
+<tr><td nowrap><a href="https://github.com/StartupBros-com/hass-renpho-health"><b>hass-renpho-health</b></a></td><td>The same Renpho scale data inside Home Assistant, as an integration you add through HACS.</td></tr>
 <tr><td nowrap><a href="https://github.com/StartupBros-com/synthetic-panel"><b>synthetic-panel</b></a></td><td>Test marketing copy against AI customer personas, scored locally. No API key needed.</td></tr>
-<tr><td nowrap><a href="https://github.com/StartupBros-com/terminal-notifications"><b>terminal-notifications</b></a></td><td>Notifications when a long job finishes, on Mac, Windows/WSL2 and Linux. Zero dependencies.</td></tr>
 </table>
 
 <h2 align="center">From House Notes</h2>
