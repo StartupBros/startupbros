@@ -1,20 +1,16 @@
 <a href="https://houseofvibe.ai/?utm_source=github&utm_medium=profile&utm_campaign=readme-banner"><img src="assets/banner.png" width="100%" alt="Will Mitchell. Helping people with day jobs build real things with AI. Founder of House of Vibe, building businesses online since 2002."></a>
 
 <p align="center">
-  <a href="https://houseofvibe.ai/?utm_source=github&utm_medium=profile&utm_campaign=readme-links"><b>houseofvibe.ai</b></a>
-  &nbsp;·&nbsp;
-  <a href="https://houseofvibe.ai/blog?utm_source=github&utm_medium=profile&utm_campaign=readme-links">House Notes</a>
-  &nbsp;·&nbsp;
-  <a href="https://x.com/startupbros">X (16K)</a>
-  &nbsp;·&nbsp;
-  <a href="https://youtube.com/startupbros">YouTube</a>
+  <a href="https://houseofvibe.ai/?utm_source=github&utm_medium=profile&utm_campaign=readme-links"><b>houseofvibe.ai</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="https://houseofvibe.ai/blog?utm_source=github&utm_medium=profile&utm_campaign=readme-links">House Notes</a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="https://github.com/StartupBros-com/hov-stack">hov-stack</a>
+  <br>
+  <sub><a href="https://x.com/startupbros">X (16K)</a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="https://youtube.com/startupbros">YouTube</a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="https://www.linkedin.com/in/willmitchell/">LinkedIn</a></sub>
 </p>
 
 <table align="center">
   <tr>
-    <td align="center" valign="top"><h3>7,000+</h3><sub>people through my<br>StartupBros programs</sub></td>
-    <td align="center" valign="top"><h3>#4</h3><sub>all-time on viberank,<br>a Claude Code usage board</sub></td>
-    <td align="center" valign="top"><h3>13</h3><sub>free Claude Code<br>plugins, MIT licensed</sub></td>
+    <td align="center" valign="top"><h3>7,000+</h3><sub>people through<br>StartupBros</sub></td>
+    <td align="center" valign="top"><h3>#4</h3><sub>all-time on<br>viberank</sub></td>
+    <td align="center" valign="top"><h3>13</h3><sub>free Claude<br>Code plugins</sub></td>
   </tr>
 </table>
 
@@ -102,4 +98,4 @@ Know someone with a day job who keeps asking you about AI? Send them to [houseof
 
 ---
 
-<sub>Want me building inside your team instead? I take on fractional AI co-founder work: [willmitchell.com](https://willmitchell.com/?utm_source=github&utm_medium=profile&utm_campaign=readme-footer) · [LinkedIn](https://www.linkedin.com/in/willmitchell/)</sub>
+<sub>Want me building inside your team instead? I take on fractional AI co-founder work: [willmitchell.com](https://willmitchell.com/?utm_source=github&utm_medium=profile&utm_campaign=readme-footer)</sub>
