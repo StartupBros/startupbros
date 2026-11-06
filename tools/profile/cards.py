@@ -6,7 +6,7 @@ import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
 
-from PIL import Image
+from PIL import Image, ImageChops, ImageDraw
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 BUILD = os.path.join(HERE, "build")
@@ -288,29 +288,52 @@ h2{margin:14px 0 0;font-weight:800;font-size:46px;line-height:1.07;letter-spacin
 """, PITCH_BODY)
 
 
-def render(name):
+def holes(im, crop):
+    """Pixels inside the card's rounded outline that are not fully opaque, so the page would show through.
+    Chrome sometimes screenshots before a tile is painted: banner_dk merged in #12 had a 37,893-pixel
+    see-through strip under the photo. The mask is drawn inside the card's visible box, since the fork
+    cards carry a deliberate transparent gutter, 3px in and with a radius at least the card's own
+    (18px or 22px, so 36 or 44 at 2x), so antialiased edges and corners never count."""
+    alpha = im.convert("RGBA").getchannel("A")
+    x0, y0, x1, y1 = alpha.getbbox()
+    mask = Image.new("L", alpha.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle((x0 + 3, y0 + 3, x1 - 4, y1 - 4),
+                                           radius=(y1 - y0) // 2 if crop else 48, fill=255)
+    clear = alpha.point(lambda v: 255 if v < 255 else 0)
+    return ImageChops.multiply(mask, clear).histogram()[255]
+
+
+def render(name, tries=3):
     w, h, html, crop = A[name]
     src = f"{SRC}/{name}.html"
     open(src, "w").write(html)
     out = f"{OUT}/{name}.png"
-    if os.path.exists(out):
-        os.remove(out)
     ud = f"{UD}/{name}"
     cmd = ["google-chrome", "--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run",
            f"--user-data-dir={ud}", "--allow-file-access-from-files", "--force-device-scale-factor=2",
            "--default-background-color=00000000", f"--window-size={w},{h}", "--virtual-time-budget=4000",
            f"--screenshot={out}", f"file://{src}"]
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-    if not os.path.exists(out):
-        return f"{name} FAILED rc={r.returncode} {r.stderr[-300:]}"
-    im = Image.open(out)
-    if crop:
-        im = im.crop(im.getchannel("A").getbbox())
-    im.save(out, optimize=True)
-    return f"{name} {im.size} {os.path.getsize(out)}"
+    for attempt in range(1, tries + 1):
+        if os.path.exists(out):
+            os.remove(out)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        if not os.path.exists(out):
+            return f"{name} FAILED rc={r.returncode} {r.stderr[-300:]}"
+        im = Image.open(out)
+        if crop:
+            im = im.crop(im.getchannel("A").getbbox())
+        n = holes(im, crop)
+        if not n:
+            im.save(out, optimize=True)
+            return f"{name} {im.size} {os.path.getsize(out)}" + (f" (render {attempt})" if attempt > 1 else "")
+    os.remove(out)
+    return f"{name} FAILED {n} see-through pixels inside the card after {tries} renders"
 
 
-names = sys.argv[1:] or list(A)
-with ThreadPoolExecutor(max_workers=6) as ex:
-    for line in ex.map(render, names):
-        print(line)
+if __name__ == "__main__":
+    names = sys.argv[1:] or list(A)
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        lines = list(ex.map(render, names))
+    print("\n".join(lines))
+    if any(" FAILED " in line for line in lines):
+        sys.exit(1)
