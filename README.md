@@ -24,7 +24,7 @@
 
 ### The setup I build with, free
 
-[**hov-stack**](https://github.com/StartupBros-com/hov-stack) is everything I run Claude Code with: the rules, the guards, the permission lists and the skills, plus a 13-plugin marketplace. The permission lists alone hold 292 allow, 75 ask and 70 deny entries, each grown from a real refusal.
+[**hov-stack**](https://github.com/StartupBros-com/hov-stack) is everything I run Claude Code with: the rules, the guards, the permission lists and the skills, plus a 13-plugin marketplace. The permission lists alone hold 292 allow, 75 ask and 70 deny entries, grown from real refusals.
 
 Add the marketplace once, then install any plugin by name:
 
