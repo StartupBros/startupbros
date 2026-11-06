@@ -57,10 +57,11 @@ MORE = [
     ("product-video", "Records a real browser tour of your product and renders it as a walkthrough video."),
     ("hov-stack", "The whole skill pack as one plugin."),
 ]
-OSS = [
-    ("renpho-mcp-server", "Ask Claude, Cursor or any MCP client about your weight, body fat and muscle mass from a Renpho smart scale."),
-    ("synthetic-panel", "Test marketing copy against AI customer personas, scored locally. No API key needed."),
-    ("terminal-notifications", "Notifications when a long job finishes, on Mac, Windows/WSL2 and Linux. Zero dependencies."),
+OSS = [  # (owner/repo, what it does); archived repos stay off this list
+    ("StartupBros/hov-router", "Use all your AI accounts from one place, and see which account handled each request, with usage, costs and errors in a dashboard."),
+    ("StartupBros-com/renpho-mcp-server", "Ask Claude, Cursor or any MCP client about your weight, body fat and muscle mass from a Renpho smart scale."),
+    ("StartupBros-com/hass-renpho-health", "The same Renpho scale data inside Home Assistant, as an integration you add through HACS."),
+    ("StartupBros-com/synthetic-panel", "Test marketing copy against AI customer personas, scored locally. No API key needed."),
 ]
 NOTES = [
     ("20 vs 17", "checks passed<br>first time", "ChatGPT Plus vs Claude Pro: which plan to keep if you don't code", f"{BLOG}/chatgpt-plus-vs-claude-pro",
@@ -115,7 +116,8 @@ parts.append(table(("Plugin", "What it does"), [(plug(n), d) for n, d in FEATURE
 parts.append("<details>\n<summary><b>7 more plugins</b></summary>\n\n"
              + table(("Plugin", "What it does"), [(plug(n), d) for n, d in MORE]) + "\n\n</details>")
 parts.append('<h2 align="center">More open source</h2>')
-parts.append(table(("Repo", "What it does"), [(f'<a href="{ORG}/{n}"><b>{n}</b></a>', d) for n, d in OSS]))
+parts.append(table(("Repo", "What it does"),
+                   [(f'<a href="https://github.com/{r}"><b>{r.split("/")[1]}</b></a>', d) for r, d in OSS]))
 parts.append('<h2 align="center">From House Notes</h2>')
 parts.append(f'<p align="center">How-tos from the House of Vibe blog, each one measured before it goes up. <a href="{utm(BLOG, "readme-notes")}">Read them all</a>.</p>')
 parts.append(table(("Result", "Note"),
