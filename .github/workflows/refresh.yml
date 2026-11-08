@@ -1,0 +1,56 @@
+# Keeps two parts of the profile README current: the latest House Notes posts (from the House of Vibe RSS feed)
+# and the merged upstream pull request count (from GitHub's search API). Commits only when the text changes.
+# GitHub pauses a scheduled workflow after 60 days with no activity in the repo; "Run workflow" on the Actions
+# tab turns it back on.
+name: Refresh profile
+
+on:
+  schedule:
+    - cron: "17 13 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "tools/profile/**"
+      - ".github/workflows/refresh.yml"
+
+permissions: {}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Test refresh.py
+        run: python3 -I -m unittest discover -s tools/profile -p "test_*.py" -v
+
+  refresh:
+    if: github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    concurrency:
+      group: refresh-profile
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Refresh House Notes and the upstream count
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 -I tools/profile/refresh.py README.md
+      - name: Commit if the README changed
+        run: |
+          if git diff --quiet -- README.md; then
+            echo "README unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: refresh House Notes and the upstream count" -- README.md
+          git push
