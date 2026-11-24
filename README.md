@@ -12,11 +12,11 @@ I also work with a small number of funded teams as a fractional AI co-founder: [
 - #1 on [viberank](https://www.viberank.app/profile/StartupBros), with 520 billion tokens in Claude Code.
 - Latest from [House Notes](https://houseofvibe.ai/blog?utm_source=github&utm_medium=profile&utm_campaign=readme-notes), the House of Vibe blog:
   <!-- house-notes:start -->
+  - [Claude Max 20x vs ChatGPT Pro: what \$200 bought at API prices in October 2026](https://houseofvibe.ai/blog/claude-max-vs-chatgpt-pro-october-2026?utm_source=github&utm_medium=profile&utm_campaign=readme-notes) · Nov 23
   - [Plant a decoy AWS key, not a flag.txt, and confirm its alert email before you trust it](https://houseofvibe.ai/blog/aws-decoy-key-alert?utm_source=github&utm_medium=profile&utm_campaign=readme-notes) · Nov 6
   - [ChatGPT Plus vs Claude Pro: which \$20 plan to keep if you don't code](https://houseofvibe.ai/blog/chatgpt-plus-vs-claude-pro?utm_source=github&utm_medium=profile&utm_campaign=readme-notes) · Oct 25
   - [Check that the Stripe fields your webhook reads through a type cast exist at its API version](https://houseofvibe.ai/blog/stripe-webhook-field-removed-by-api-version?utm_source=github&utm_medium=profile&utm_campaign=readme-notes) · Oct 7
   - [Cloudflare's new CLI or plain curl for your coding agent](https://houseofvibe.ai/blog/cloudflare-cli-or-curl-for-coding-agents?utm_source=github&utm_medium=profile&utm_campaign=readme-notes) · Oct 5
-  - [Find the Claude Code memories your MEMORY.md no longer reaches](https://houseofvibe.ai/blog/claude-code-auto-memory?utm_source=github&utm_medium=profile&utm_campaign=readme-notes) · Oct 4
   <!-- house-notes:end -->
 
 ## Open source
